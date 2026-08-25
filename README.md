@@ -20,10 +20,11 @@ Current milestones include:
 - Coverage Lint with canonical configuration matrices and per-stage candidate-pool metrics
 - a 29-item fixture checkpoint with substantially improved Stage 3 and Light coverage
 - an automated Quality Gate foundation that combines regression and coverage health checks
+- a v0.1 prompt compiler foundation that turns generated stages into one coherent story-writing prompt
 
-Prompt compilation is currently a minimal placeholder path rather than the finished v0.1 compiler. The current compiler layer is intentionally simple while generation, diagnostics, and content coverage are stabilized first.
+The v0.1 compiler now separates story length, opening style, pacing, writing style, lexical directness, adult-content share, and description focus. It also carries character physical constraints, scene constraints, Main Anchor priority, stage progression, and role-direction consistency into the final prompt.
 
-The next validation milestone is to measure multi-seed stability before freezing baseline-relative quality thresholds. Further fixture expansion should balance Stage 1 while addressing the remaining Light mobility structural-effect gap.
+The final end-user UI is still pending. The current `index.html` remains a developer-oriented demo and debug surface; the next product-facing milestone is a form-based UI that edits compiler/story settings without changing eligibility semantics.
 
 ## Product principles
 
@@ -40,8 +41,10 @@ The next validation milestone is to measure multi-seed stability before freezing
 ## Repository layout
 
 - `data/adult-items.json` — structured fixture/content data.
-- `js/app.js` — browser-facing application wiring and schema hard-stop behavior.
-- `js/compiler-dumb.js` — current minimal prompt-output placeholder used before the full v0.1 compiler is implemented.
+- `js/app.js` — browser-facing demo wiring and schema hard-stop behavior.
+- `js/compiler-v01.js` — current v0.1 story prompt compiler.
+- `js/compiler-dumb.js` — retained legacy minimal compiler for historical comparison; not used by the current demo path.
+- `js/compiler-test.js` — prompt compiler smoke checks.
 - `js/providers.js` — derives anatomy, equipment, and scene providers.
 - `js/eligibility.js` — hard permission, stage, provider, mobility, and binding checks.
 - `js/binding.js` — directed/egalitarian role state and role switching.
@@ -57,9 +60,10 @@ The next validation milestone is to measure multi-seed stability before freezing
 
 ## Diagnostic and entry pages
 
-The repository contains six useful entry points:
+The repository contains seven useful entry points:
 
-- `index.html` — project entry page linking to the developer diagnostics.
+- `index.html` — project demo and compiled prompt preview.
+- `compiler-test.html` — compiler-only smoke test and sample prompt output.
 - `test.html` — regression suite.
 - `explain.html` — generation explanation and reverse-query diagnostics.
 - `coverage.html` — canonical configuration coverage metrics.
@@ -75,6 +79,22 @@ python -m http.server 8000
 ```
 
 Then open `http://localhost:8000/` and navigate to the diagnostic pages as needed. Any equivalent static web server is fine.
+
+## Prompt compiler
+
+`compileStoryPrompt()` receives generation output plus character, scene, and story-level settings. It does not re-run eligibility or generation logic.
+
+Current story-level axes are intentionally independent:
+
+- length: ultra-short / short / medium
+- opening: direct / situational
+- pace: direct / quick escalation / gradual / slow burn / wave
+- writing style: character-driven / dialogue-heavy / sensory / concise
+- lexical directness: subtle / balanced / direct / very direct
+- adult-content share: low / medium / high
+- description focus: interaction / dialogue / emotion / physical
+
+The compiler renders the Main Anchor once, marks where it executes in the stage plan, preserves actor/receiver direction for directed items, keeps mutual items non-directed, and tells the downstream model not to invent anatomy, equipment, or scene state that the engine did not provide.
 
 ## Coverage metrics
 
@@ -94,11 +114,9 @@ Current hard failures include regression/schema failures, dead or never-selected
 
 Current warnings include narrow per-stage pools, `S3/S1 < 0.50`, mobility changes with zero preservation rejections, singleton clusters, and a mobility-changing fixture ratio below 10%.
 
-Baseline-relative rules such as `previous avgEligiblePool × 0.85` are deliberately not frozen yet. Seed-prefix stability should be measured first so stochastic noise is not mistaken for regression.
-
 ## Development workflow
 
-Development is kept in small, reviewable pull requests with explicit responsibility boundaries. Core engine changes, diagnostic changes, and fixture/data expansion should preferably be separated so regressions can be attributed cleanly.
+Development is kept in small, reviewable pull requests with explicit responsibility boundaries. Core engine changes, diagnostic changes, compiler/UI changes, and fixture/data expansion should preferably be separated so regressions can be attributed cleanly.
 
 Before merging meaningful engine or data changes:
 
@@ -108,5 +126,7 @@ Before merging meaningful engine or data changes:
 4. inspect Coverage Lint for dead or never-selected fixtures, empty slots, and per-stage pool collapse;
 5. use Explain diagnostics when a candidate is unexpectedly excluded or not selected;
 6. for engine changes, verify deterministic behavior and JSON-order invariance.
+
+For compiler changes, also run `compiler-test.html` and inspect at least one compiled prompt for duplicate anchors, unresolved placeholders, and incorrect role direction.
 
 See `CHANGELOG.md` for milestone history and `docs/` for detailed architecture decisions and empirical review notes.
