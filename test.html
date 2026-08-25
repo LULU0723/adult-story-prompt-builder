@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Adult Story Prompt Builder - Regression Tests</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 40px auto; padding: 0 20px; line-height: 1.5; }
+    button { padding: 10px 16px; font-size: 16px; }
+    pre { white-space: pre-wrap; background: #f4f4f4; padding: 16px; border-radius: 8px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>v0.1 Engine Regression Tests</h1>
+  <p>Runs 300 deterministic seeds, verifies that the chosen Main Anchor is emitted exactly once as <code>kind:"main"</code>, no <code>anchor-error</code> occurs, and reversing the JSON fixture order does not change results. Also checks participant-count and role-shape filtering.</p>
+  <button id="run-tests">Run regression suite</button>
+  <pre id="test-output">Not run yet.</pre>
+  <script type="module" src="./js/test-runner.js"></script>
+</body>
+</html>
