@@ -20,6 +20,10 @@ function hasOwn(value, key) {
   return value != null && Object.prototype.hasOwnProperty.call(value, key);
 }
 
+function isFiniteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 export function evaluateQualityGate(regression, coverage, sourceItems = null) {
   const hardFailures = [];
   const warnings = [];
@@ -79,6 +83,28 @@ export function evaluateQualityGate(regression, coverage, sourceItems = null) {
     }
     if (malformed) continue;
 
+    const numericFields = ['runs', 'anchorsFound', 'emptyRate', 'mobilityRunRatio', 'preservationRejections'];
+    for (const field of numericFields) {
+      if (!isFiniteNumber(config[field])) {
+        pushIssue(hardFailures, 'gate.malformed_config', `${name}: ${field} is not a finite number.`, { config: name, field });
+        malformed = true;
+      }
+    }
+    if (malformed) continue;
+
+    if (config.runs <= 0) {
+      pushIssue(hardFailures, 'gate.malformed_config', `${name}: runs must be greater than 0.`, { config: name, field: 'runs', value: config.runs });
+      continue;
+    }
+    if (config.anchorsFound < 0 || config.anchorsFound > config.runs) {
+      pushIssue(hardFailures, 'gate.malformed_config', `${name}: anchorsFound ${config.anchorsFound} is outside 0..${config.runs}.`, { config: name, field: 'anchorsFound', value: config.anchorsFound });
+      continue;
+    }
+    if (config.emptyRate < 0 || config.emptyRate > 1 || config.mobilityRunRatio < 0 || config.mobilityRunRatio > 1 || config.preservationRejections < 0) {
+      pushIssue(hardFailures, 'gate.malformed_config', `${name}: one or more numeric metrics are outside their valid range.`, { config: name });
+      continue;
+    }
+
     if (config.anchorsFound < config.runs) {
       pushIssue(hardFailures, 'coverage.no_anchor_runs', `${name}: anchors found ${config.anchorsFound}/${config.runs}.`, { config: name });
     }
@@ -92,17 +118,19 @@ export function evaluateQualityGate(regression, coverage, sourceItems = null) {
         pushIssue(hardFailures, 'gate.malformed_config', `${name}: avgEligiblePoolByStage.${stage} missing.`, { config: name, field: `avgEligiblePoolByStage.${stage}` });
         continue;
       }
-      const pool = Number(stagePools[stage]);
-      if (!Number.isFinite(pool)) {
-        pushIssue(hardFailures, 'gate.malformed_config', `${name}: avgEligiblePoolByStage.${stage} is not numeric.`, { config: name, field: `avgEligiblePoolByStage.${stage}` });
+      const pool = stagePools[stage];
+      if (!isFiniteNumber(pool)) {
+        pushIssue(hardFailures, 'gate.malformed_config', `${name}: avgEligiblePoolByStage.${stage} is not a finite number.`, { config: name, field: `avgEligiblePoolByStage.${stage}` });
+      } else if (pool < 0) {
+        pushIssue(hardFailures, 'gate.malformed_config', `${name}: avgEligiblePoolByStage.${stage} must not be negative.`, { config: name, field: `avgEligiblePoolByStage.${stage}`, value: pool });
       } else if (pool < 4) {
         pushIssue(warnings, 'coverage.stage_pool_narrow', `${name}: Stage ${stage} avgEligiblePool ${pool.toFixed(2)} < 4.`, { config: name, stage: Number(stage), value: pool });
       }
     }
 
-    const s1 = Number(stagePools?.['1']);
-    const s3 = Number(stagePools?.['3']);
-    if (Number.isFinite(s1) && Number.isFinite(s3) && s1 > 0 && s3 / s1 < 0.5) {
+    const s1 = stagePools?.['1'];
+    const s3 = stagePools?.['3'];
+    if (isFiniteNumber(s1) && isFiniteNumber(s3) && s1 > 0 && s3 / s1 < 0.5) {
       pushIssue(warnings, 'coverage.stage3_ratio', `${name}: S3/S1 ${(s3 / s1).toFixed(2)} < 0.50.`, { config: name, value: s3 / s1 });
     }
 
@@ -121,6 +149,8 @@ export function evaluateQualityGate(regression, coverage, sourceItems = null) {
 
   if (!hasOwn(coverage?.totals, 'mobilityChangingItemRatio')) {
     pushIssue(hardFailures, 'gate.malformed_coverage', 'coverage.totals.mobilityChangingItemRatio missing.', { field: 'totals.mobilityChangingItemRatio' });
+  } else if (!isFiniteNumber(coverage.totals.mobilityChangingItemRatio) || coverage.totals.mobilityChangingItemRatio < 0 || coverage.totals.mobilityChangingItemRatio > 1) {
+    pushIssue(hardFailures, 'gate.malformed_coverage', 'coverage.totals.mobilityChangingItemRatio is invalid.', { field: 'totals.mobilityChangingItemRatio' });
   } else if (coverage.totals.mobilityChangingItemRatio < 0.10) {
     pushIssue(warnings, 'mobility.item_ratio_low', `mobilityChangingItemRatio ${(coverage.totals.mobilityChangingItemRatio * 100).toFixed(1)}% < 10%.`, { value: coverage.totals.mobilityChangingItemRatio });
   }
