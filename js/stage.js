@@ -27,25 +27,19 @@ function countRemainingOpportunities(item, currentStage, currentLocal, slotsBySt
 }
 
 function anchorDirection(anchorChoice, binding) {
-  if (anchorChoice.direction) {
-    return { ...anchorChoice.direction, binding };
-  }
-  if (binding.mode === "directed") {
-    return { actorId: binding.dominant, receiverId: binding.receptive, binding };
-  }
+  if (anchorChoice.direction) return { ...anchorChoice.direction, binding };
+  if (binding.mode === "directed") return { actorId: binding.dominant, receiverId: binding.receptive, binding };
   throw new Error("egalitarian anchor is missing pinned direction");
 }
 
 function enablerDirection(anchorChoice, binding) {
-  if (anchorChoice.reachability?.enablerDirection) {
-    return { ...anchorChoice.reachability.enablerDirection, binding };
-  }
+  if (anchorChoice.reachability?.enablerDirection) return { ...anchorChoice.reachability.enablerDirection, binding };
   return anchorDirection(anchorChoice, binding);
 }
 
 function anchorDirectlyEligible(anchorChoice, baseCtx, state, binding, selectedIds) {
   const direction = anchorDirection(anchorChoice, binding);
-  const result = evaluateEligibility(anchorChoice.item, {
+  return evaluateEligibility(anchorChoice.item, {
     ...baseCtx,
     stage: anchorChoice.stage,
     actorId: direction.actorId,
@@ -54,8 +48,7 @@ function anchorDirectlyEligible(anchorChoice, baseCtx, state, binding, selectedI
     selectedIds,
     binding,
     roleSwitchUsed: binding.roleSwitchUsed
-  });
-  return result.eligible;
+  }).eligible;
 }
 
 function anchorReachableWithOneEnabler(items, anchorChoice, baseCtx, state, binding, selectedIds, position, slotsByStage) {
@@ -66,7 +59,6 @@ function anchorReachableWithOneEnabler(items, anchorChoice, baseCtx, state, bind
     if (enabler.id === anchorChoice.item.id || selectedIds.has(enabler.id)) continue;
     for (const enablerStage of enabler.stageHints ?? []) {
       if (!hasFutureSlotForStage(enablerStage, position.stage, position.local, slotsByStage, anchorChoice.stage)) continue;
-
       const direction = enablerDirection(anchorChoice, binding);
       const enablerCtx = {
         ...baseCtx,
@@ -103,34 +95,47 @@ function candidatePreservesAnchor(item, items, ctx, direction, position, slotsBy
   if (item.roleSwitch) afterBinding = applyRoleSwitch(afterBinding);
   const afterSelected = new Set([...(ctx.selectedIds ?? []), item.id]);
 
-  return anchorReachableWithOneEnabler(
-    items,
-    ctx.anchorChoice,
-    ctx,
-    afterState,
-    afterBinding,
-    afterSelected,
-    position,
-    slotsByStage
-  );
+  return anchorReachableWithOneEnabler(items, ctx.anchorChoice, ctx, afterState, afterBinding, afterSelected, position, slotsByStage);
+}
+
+function summarizeRejections(excluded) {
+  const counts = {};
+  for (const entry of excluded) {
+    for (const rejection of entry.rejections ?? []) counts[rejection.ruleId] = (counts[rejection.ruleId] ?? 0) + 1;
+  }
+  return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([ruleId, count]) => ({ ruleId, count }));
 }
 
 function drawOne(items, ctx, slotIndex, direction, position, slotsByStage, forcedItemId = null) {
   const candidates = [];
+  const excluded = [];
+  const totalPool = items.length;
+
   for (const item of items) {
-    if (item.id === ctx.anchorChoice?.item.id) continue;
-    if (forcedItemId && item.id !== forcedItemId) continue;
+    if (item.id === ctx.anchorChoice?.item.id) {
+      excluded.push({ itemId: item.id, rejections: [{ stage: "anchor", ruleId: "anchor.reserved", detail: "Chosen anchor is reserved for the main slot" }] });
+      continue;
+    }
+    if (forcedItemId && item.id !== forcedItemId) {
+      excluded.push({ itemId: item.id, rejections: [{ stage: "anchor", ruleId: "anchor.forced_enabler", detail: `Slot is reserved for enabler ${forcedItemId}` }] });
+      continue;
+    }
 
     const result = evaluateEligibility(item, ctx);
-    if (!result.eligible) continue;
-    if (!candidatePreservesAnchor(item, items, ctx, direction, position, slotsByStage)) continue;
+    if (!result.eligible) {
+      excluded.push({ itemId: item.id, rejections: result.rejections });
+      continue;
+    }
+    if (!candidatePreservesAnchor(item, items, ctx, direction, position, slotsByStage)) {
+      excluded.push({ itemId: item.id, rejections: [{ stage: "anchor", ruleId: "anchor.preservation", detail: "Selecting this item would make the main anchor unreachable" }] });
+      continue;
+    }
 
     const score = scoreItem(item, ctx);
     candidates.push({ item, score, weight: score.weight });
   }
 
   candidates.sort((a, b) => a.item.id.localeCompare(b.item.id));
-
   const { rng, key } = rngFor({
     dataVersion: ctx.dataVersion,
     masterSeed: ctx.masterSeed,
@@ -139,7 +144,23 @@ function drawOne(items, ctx, slotIndex, direction, position, slotsByStage, force
     reroll: ctx.rerollCounts?.[slotIndex] ?? 0
   });
   const chosen = weightedDraw(candidates, rng, entry => entry.weight);
-  return { chosen, candidates, key };
+
+  return {
+    chosen,
+    candidates,
+    excluded,
+    key,
+    diagnostics: {
+      totalPool,
+      eligiblePool: candidates.length,
+      excludedCount: excluded.length,
+      topRejections: summarizeRejections(excluded).slice(0, 5),
+      forcedItemId,
+      pinnedDirection: Boolean(ctx.anchorChoice?.direction && (forcedItemId || position.stage === ctx.anchorChoice.stage)),
+      direction: { actorId: direction.actorId, receiverId: direction.receiverId },
+      stateBefore: structuredClone(ctx.characterState)
+    }
+  };
 }
 
 export function generateStages(items, baseCtx, anchorChoice, slotsByStage = { 1: 1, 2: 1, 3: 1 }) {
@@ -149,7 +170,6 @@ export function generateStages(items, baseCtx, anchorChoice, slotsByStage = { 1:
   const selectedIds = new Set();
   const selectedItems = [];
   let slotIndex = 0;
-
   const requiredEnablerId = anchorChoice.reachability?.direct === false ? anchorChoice.reachability.enabler : null;
 
   for (const stage of [1, 2, 3]) {
@@ -199,44 +219,42 @@ export function generateStages(items, baseCtx, anchorChoice, slotsByStage = { 1:
 
       if (isAnchorSlot) {
         const check = evaluateEligibility(anchorChoice.item, ctx);
+        const anchorDiagnostics = {
+          totalPool: 1,
+          eligiblePool: check.eligible ? 1 : 0,
+          excludedCount: check.eligible ? 0 : 1,
+          topRejections: check.eligible ? [] : summarizeRejections([{ itemId: anchorChoice.item.id, rejections: check.rejections }]),
+          forcedItemId: null,
+          pinnedDirection: Boolean(anchorChoice.direction),
+          direction: { actorId: direction.actorId, receiverId: direction.receiverId },
+          stateBefore: structuredClone(state)
+        };
         if (!check.eligible) {
-          results.push({
-            stage,
-            slotIndex,
-            kind: "anchor-error",
-            item: anchorChoice.item,
-            rejections: check.rejections,
-            state: structuredClone(state),
-            direction
-          });
+          results.push({ stage, slotIndex, kind: "anchor-error", item: anchorChoice.item, rejections: check.rejections, state: structuredClone(state), direction, diagnostics: anchorDiagnostics });
           slotIndex++;
           continue;
         }
         const chosen = { item: anchorChoice.item, score: scoreItem(anchorChoice.item, { ...ctx, anchor: null }) };
-        // A pinned egalitarian anchor is an execution constraint, not a debt event.
         if (chosen.item.roleShape !== "mutual" && binding.mode === "directed") binding = direction.binding;
         state = applyMobilityEffects(chosen.item, direction, state);
         selectedIds.add(chosen.item.id);
         selectedItems.push(chosen.item);
-        results.push({ stage, slotIndex, kind: "main", ...chosen, seedKey: "anchor", state: structuredClone(state), direction });
+        results.push({ stage, slotIndex, kind: "main", ...chosen, seedKey: "anchor", state: structuredClone(state), direction, diagnostics: anchorDiagnostics });
         slotIndex++;
         continue;
       }
 
       const draw = drawOne(items, ctx, slotIndex, direction, { stage, local }, slotsByStage, forcedItemId);
       if (!draw.chosen) {
-        results.push({ stage, slotIndex, kind: "empty", candidates: draw.candidates, seedKey: draw.key, state: structuredClone(state), direction, forcedItemId });
+        results.push({ stage, slotIndex, kind: "empty", candidates: draw.candidates, excluded: draw.excluded, seedKey: draw.key, state: structuredClone(state), direction, forcedItemId, diagnostics: draw.diagnostics });
         slotIndex++;
         continue;
       }
 
       const chosen = draw.chosen;
       if (chosen.item.roleShape !== "mutual") {
-        if (binding.mode === "egalitarian") {
-          binding = directionIsPinned ? commitEgalitarianDirection(binding, direction.actorId) : direction.binding;
-        } else {
-          binding = direction.binding;
-        }
+        if (binding.mode === "egalitarian") binding = directionIsPinned ? commitEgalitarianDirection(binding, direction.actorId) : direction.binding;
+        else binding = direction.binding;
       }
       state = applyMobilityEffects(chosen.item, direction, state);
       selectedIds.add(chosen.item.id);
@@ -250,7 +268,9 @@ export function generateStages(items, baseCtx, anchorChoice, slotsByStage = { 1:
         seedKey: draw.key,
         state: structuredClone(state),
         direction,
-        forcedItemId
+        forcedItemId,
+        excluded: draw.excluded,
+        diagnostics: draw.diagnostics
       });
       slotIndex++;
     }
