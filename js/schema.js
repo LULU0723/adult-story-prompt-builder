@@ -79,6 +79,12 @@ export function validateItem(item) {
   if (item?.roleSwitch && !item.stageHints.some(stage => stage >= 2)) {
     errors.push(`${item.id}: roleSwitch must be possible in stage 2 or 3`);
   }
+  if (item?.roleSwitch && item?.anchorSuitability > 0) {
+    errors.push(`${item.id}: roleSwitch items cannot be Main Anchors in v0.1`);
+  }
+  if (item?.roleShape === "mutual" && Object.keys(item?.setsMobility ?? {}).length > 0) {
+    errors.push(`${item.id}: mutual items cannot set asymmetric mobility in v0.1`);
+  }
   if (item?.deprecated && item?.defaultStatus === "allowed") {
     warnings.push(`${item.id}: deprecated item should not default to allowed`);
   }
