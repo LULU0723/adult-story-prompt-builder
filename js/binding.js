@@ -18,6 +18,20 @@ export function makeEgalitarianBinding(characterIds) {
   };
 }
 
+export function commitEgalitarianDirection(binding, actorId) {
+  if (binding.mode !== "egalitarian") return binding;
+  const [firstId, secondId] = binding.characterIds ?? [];
+  if (!firstId || !secondId) throw new Error("egalitarian binding is missing characterIds");
+  if (actorId !== firstId && actorId !== secondId) {
+    throw new Error(`Actor ${actorId} is not part of this egalitarian binding`);
+  }
+  return {
+    ...binding,
+    debt: binding.debt + (actorId === firstId ? 1 : -1),
+    previousInitiator: actorId
+  };
+}
+
 export function resolveDirection(binding, seedContext) {
   if (binding.mode === "directed") {
     return { actorId: binding.dominant, receiverId: binding.receptive, binding };
@@ -33,12 +47,7 @@ export function resolveDirection(binding, seedContext) {
   const pFirst = 1 / (1 + Math.exp(-logit));
   const actorId = rng() < pFirst ? firstId : secondId;
   const receiverId = actorId === firstId ? secondId : firstId;
-  const nextBinding = {
-    ...binding,
-    debt: binding.debt + (actorId === firstId ? 1 : -1),
-    previousInitiator: actorId
-  };
-  return { actorId, receiverId, binding: nextBinding };
+  return { actorId, receiverId, binding: commitEgalitarianDirection(binding, actorId) };
 }
 
 export function applyRoleSwitch(binding) {
