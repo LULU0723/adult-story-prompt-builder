@@ -5,6 +5,14 @@ export const STAGES = new Set([1, 2, 3]);
 export const MOBILITY = ["immobilized", "restricted", "partial", "free"];
 export const TRAIT_LEVELS = new Set(["very_low", "low", "mid", "high", "very_high"]);
 export const PERMISSION_STATES = new Set(["allowed", "no_recommend", "disabled"]);
+export const SCHEMA_ERROR_CODES = Object.freeze({
+  ROLE_SWITCH_ANCHOR: "schema.role_switch_anchor",
+  MUTUAL_ASYMMETRIC_MOBILITY: "schema.mutual_asymmetric_mobility"
+});
+
+function codedError(code, message) {
+  return `[${code}] ${message}`;
+}
 
 export function mobilityRank(value) {
   const index = MOBILITY.indexOf(value);
@@ -80,10 +88,10 @@ export function validateItem(item) {
     errors.push(`${item.id}: roleSwitch must be possible in stage 2 or 3`);
   }
   if (item?.roleSwitch && item?.anchorSuitability > 0) {
-    errors.push(`${item.id}: roleSwitch items cannot be Main Anchors in v0.1`);
+    errors.push(codedError(SCHEMA_ERROR_CODES.ROLE_SWITCH_ANCHOR, `${item.id}: roleSwitch items cannot be Main Anchors in v0.1`));
   }
   if (item?.roleShape === "mutual" && Object.keys(item?.setsMobility ?? {}).length > 0) {
-    errors.push(`${item.id}: mutual items cannot set asymmetric mobility in v0.1`);
+    errors.push(codedError(SCHEMA_ERROR_CODES.MUTUAL_ASYMMETRIC_MOBILITY, `${item.id}: mutual items cannot set asymmetric mobility in v0.1`));
   }
   if (item?.deprecated && item?.defaultStatus === "allowed") {
     warnings.push(`${item.id}: deprecated item should not default to allowed`);
