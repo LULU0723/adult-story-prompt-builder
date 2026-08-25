@@ -115,7 +115,11 @@ function stageLines(generation, byId) {
     if (!beats.length) continue;
     lines.push(`【${STAGE_LABELS[stage]}階段】`);
     for (const beat of beats) {
-      const prefix = beat.kind === 'main' ? 'Main Anchor' : beat.kind === 'forced-enabler' ? '必要鋪墊' : '互動節點';
+      if (beat.kind === 'main') {
+        lines.push('- Main Anchor：在此階段執行上方主軸；不要重複成兩個不同事件。');
+        continue;
+      }
+      const prefix = beat.kind === 'forced-enabler' ? '必要鋪墊' : '互動節點';
       lines.push(`- ${prefix}：${beat.text}`);
     }
   }
