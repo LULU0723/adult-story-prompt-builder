@@ -20,6 +20,8 @@ Current milestones include:
 - Coverage Lint with canonical configuration matrices and per-stage candidate-pool metrics
 - a 20-item fixture checkpoint used to validate Light/Medium/Heavy coverage
 
+Prompt compilation is currently a minimal placeholder path rather than the finished v0.1 compiler. The current compiler layer is intentionally simple while generation, diagnostics, and content coverage are stabilized first.
+
 The next planned content milestone is a second fixture expansion focused on Stage 3, Light + Stage 3, light mobility, additional anatomy/provider paths, and semi-private scene coverage.
 
 ## Product principles
@@ -32,11 +34,13 @@ The next planned content milestone is a second fixture expansion focused on Stag
 - Main Anchor reachability is preserved across earlier selections.
 - Seeded generation must remain deterministic and independent of fixture JSON order.
 - User locks and explicit permission states override automatic recommendation.
-- Internal modules remain separate even though the final product compiles one coherent prompt.
+- Internal modules remain separate even though the final product is intended to compile one coherent prompt.
 
 ## Repository layout
 
 - `data/adult-items.json` — structured fixture/content data.
+- `js/app.js` — browser-facing application wiring and schema hard-stop behavior.
+- `js/compiler-dumb.js` — current minimal prompt-output placeholder used before the full v0.1 compiler is implemented.
 - `js/providers.js` — derives anatomy, equipment, and scene providers.
 - `js/eligibility.js` — hard permission, stage, provider, mobility, and binding checks.
 - `js/binding.js` — directed/egalitarian role state and role switching.
@@ -49,11 +53,11 @@ The next planned content milestone is a second fixture expansion focused on Stag
 - `js/test-runner.js` — browser regression suite.
 - `docs/` — data-model, architecture, review, and checkpoint notes.
 
-## Diagnostic pages
+## Diagnostic and entry pages
 
-The repository contains four useful entry points:
+The repository contains five useful entry points:
 
-- `index.html` — project entry page.
+- `index.html` — project entry page linking to the developer diagnostics.
 - `test.html` — regression suite.
 - `explain.html` — generation explanation and reverse-query diagnostics.
 - `coverage.html` — canonical configuration coverage metrics.
