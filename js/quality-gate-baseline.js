@@ -55,7 +55,7 @@ export function runBaselineQualityGate() {
   };
 }
 
-const runButton = document.querySelector('#run-quality-gate');
+const runButton = document.querySelector('#run-baseline-quality-gate');
 if (runButton) {
   runButton.addEventListener('click', () => {
     const output = document.querySelector('#quality-output');
