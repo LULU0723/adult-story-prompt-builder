@@ -4,20 +4,39 @@ This file records major project milestones and user-visible development changes.
 
 ## Unreleased
 
+### Added
+
+- Automated Quality Gate foundation combining the existing regression suite and Coverage Lint into hard-failure and warning rules.
+- `quality.html` developer page for running the gate locally.
+
 ### Changed
 
-- Coverage `mobilityRunRatio` now uses `anchorsFound` as its denominator so future no-anchor canonical runs cannot dilute the metric.
-- Coverage metric notes now explicitly distinguish candidate-pool health from duplicate rejections and warn against comparing raw selection counts across different canonical config sets.
-- Project README updated to reflect the implemented v0.1 engine, diagnostics, current 20-item fixture checkpoint, and local development workflow.
+- Project README updated for the 29-item fixture checkpoint and Quality Gate workflow.
+- Coverage `mobilityRunRatio` uses `anchorsFound` as its denominator so future no-anchor canonical runs cannot dilute the metric.
+- Coverage metric notes distinguish candidate-pool health from duplicate rejections and warn against comparing raw selection counts across different canonical config sets.
 
 ### Planned
 
-- Correct `private_aftercare.anchorSuitability` from `1` to `0` in the next fixture/data PR.
-- Expand the fixture set beyond 20 items with emphasis on Stage 3 and Light + Stage 3 coverage.
-- Add at least one Light mobility-changing fixture so Light canonical paths exercise mobility reachability/preservation.
-- Add fixtures that use currently sparse provider paths such as `receptacle:oral` and semi-private scene-specific behavior.
+- Measure Coverage metric stability across multiple seed prefixes before freezing baseline-relative regression thresholds.
+- Add baseline-relative pool regression rules only after stochastic variance is quantified.
+- Keep future fixture expansion balanced across stages; Stage 1 is now the narrowest stage but remains healthy in absolute terms.
+- Give Light mobility state a real structural effect; the current `light_position_hold` changes mobility to `partial`, but no existing fixture is gated by that transition.
 
 ## Project milestones
+
+### PR #8 — Fixture expansion batch 2
+
+- Expanded `data/adult-items.json` from 20 to 29 fixtures.
+- Added nine Stage-3-capable fixtures, including Light late-stage options, two `receptacle:oral` provider paths, and semi-private-only behavior.
+- Corrected `private_aftercare.anchorSuitability` from `1` to `0`.
+- Raised Stage 3 candidate-pool coverage substantially while keeping dead/never-selected lists empty and anchor concentration lower.
+- Added `light_position_hold`, which exercises mobility state mutation in Light runs; external review found that its `partial` state currently has no downstream eligibility/preservation effect.
+
+### PR #7 — Maintenance: docs and coverage metric semantics
+
+- Updated `mobilityRunRatio` to use `anchorsFound` as its denominator.
+- Added explicit metric notes for duplicate rejections and raw selection counts.
+- Refreshed `README.md` and added `CHANGELOG.md`.
 
 ### PR #6 — Coverage follow-up
 
