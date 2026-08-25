@@ -2,44 +2,67 @@ import { evaluateEligibility, applyMobilityEffects } from "./eligibility.js";
 import { weightedDraw, rngFor } from "./rng.js";
 import { scoreItem } from "./score.js";
 
-function simulatePathToAnchor(anchor, ctx, enablers, anchorStage) {
-  // v0.1 reachability supports either direct reachability or one monotonic mobility enabler.
+function slotsAvailable(ctx, stage) {
+  return (ctx.slotsByStage?.[stage] ?? 0) > 0;
+}
+
+function chooseSeededStage(item, allowedStages, ctx) {
+  const stages = [...allowedStages].sort((a, b) => a - b);
+  const { rng } = rngFor({
+    dataVersion: ctx.dataVersion,
+    masterSeed: ctx.masterSeed,
+    stream: `anchor-stage:${item.id}`,
+    slot: 0,
+    reroll: ctx.anchorReroll ?? 0
+  });
+  return stages[Math.floor(rng() * stages.length)];
+}
+
+export function simulatePathToAnchor(anchor, ctx, enablers, anchorStage) {
   const direct = evaluateEligibility(anchor, { ...ctx, stage: anchorStage });
-  if (direct.eligible) return { reachable: true, enabler: null };
+  if (direct.eligible) return { reachable: true, direct: true, enabler: null, enablerStage: null };
 
-  for (const candidate of enablers) {
-    const candidateStage = candidate.stageHints.filter(stage => stage < anchorStage).at(-1);
-    if (!candidateStage) continue;
-    const candidateEval = evaluateEligibility(candidate, { ...ctx, stage: candidateStage });
-    if (!candidateEval.eligible) continue;
+  const orderedEnablers = [...enablers].sort((a, b) => a.id.localeCompare(b.id));
+  for (const candidate of orderedEnablers) {
+    const possibleStages = candidate.stageHints
+      .filter(stage => stage < anchorStage && slotsAvailable(ctx, stage))
+      .sort((a, b) => a - b);
 
-    const nextState = applyMobilityEffects(
-      candidate,
-      { actorId: ctx.actorId, receiverId: ctx.receiverId },
-      ctx.characterState
-    );
-    const anchorEval = evaluateEligibility(anchor, {
-      ...ctx,
-      characterState: nextState,
-      stage: anchorStage,
-      selectedIds: new Set([...(ctx.selectedIds ?? []), candidate.id])
-    });
-    if (anchorEval.eligible) {
-      return { reachable: true, enabler: candidate.id, enablerStage: candidateStage };
+    for (const candidateStage of possibleStages) {
+      const candidateEval = evaluateEligibility(candidate, { ...ctx, stage: candidateStage });
+      if (!candidateEval.eligible) continue;
+
+      const nextState = applyMobilityEffects(
+        candidate,
+        { actorId: ctx.actorId, receiverId: ctx.receiverId },
+        ctx.characterState
+      );
+      const anchorEval = evaluateEligibility(anchor, {
+        ...ctx,
+        characterState: nextState,
+        stage: anchorStage,
+        selectedIds: new Set([...(ctx.selectedIds ?? []), candidate.id])
+      });
+      if (anchorEval.eligible) {
+        return { reachable: true, direct: false, enabler: candidate.id, enablerStage: candidateStage };
+      }
     }
   }
-  return { reachable: false, enabler: null };
+  return { reachable: false, direct: false, enabler: null, enablerStage: null };
 }
 
 export function chooseAnchor(items, ctx) {
   const candidates = [];
   for (const item of items) {
     if ((item.anchorSuitability ?? 0) <= 0) continue;
-    const allowedStages = item.stageHints.filter(stage => stage >= ctx.minAnchorStage && stage <= ctx.maxAnchorStage);
+    const allowedStages = item.stageHints.filter(stage =>
+      stage >= ctx.minAnchorStage &&
+      stage <= ctx.maxAnchorStage &&
+      slotsAvailable(ctx, stage)
+    );
     if (allowedStages.length === 0) continue;
 
-    // Prefer the latest legal stage for an anchor in v0.1 so setup items remain possible.
-    const stage = allowedStages.at(-1);
+    const stage = chooseSeededStage(item, allowedStages, ctx);
     const reachability = simulatePathToAnchor(
       item,
       ctx,
@@ -48,7 +71,7 @@ export function chooseAnchor(items, ctx) {
     );
     if (!reachability.reachable) continue;
 
-    const score = scoreItem(item, { ...ctx, anchor: item });
+    const score = scoreItem(item, { ...ctx, anchor: null });
     candidates.push({
       item,
       stage,
@@ -57,6 +80,8 @@ export function chooseAnchor(items, ctx) {
       score
     });
   }
+
+  candidates.sort((a, b) => a.item.id.localeCompare(b.item.id));
 
   const { rng, key } = rngFor({
     dataVersion: ctx.dataVersion,
