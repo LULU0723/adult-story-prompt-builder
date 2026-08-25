@@ -106,7 +106,7 @@ function summarizeRejections(excluded) {
   return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([ruleId, count]) => ({ ruleId, count }));
 }
 
-function drawOne(items, ctx, slotIndex, direction, position, slotsByStage, forcedItemId = null) {
+function drawOne(items, ctx, slotIndex, direction, position, slotsByStage, forcedItemId = null, directionIsPinned = false) {
   const candidates = [];
   const excluded = [];
   const totalPool = items.length;
@@ -151,12 +151,13 @@ function drawOne(items, ctx, slotIndex, direction, position, slotsByStage, force
     excluded,
     key,
     diagnostics: {
+      slotMode: forcedItemId ? "forced_enabler" : "random_draw",
       totalPool,
       eligiblePool: candidates.length,
       excludedCount: excluded.length,
       topRejections: summarizeRejections(excluded).slice(0, 5),
       forcedItemId,
-      pinnedDirection: Boolean(ctx.anchorChoice?.direction && (forcedItemId || position.stage === ctx.anchorChoice.stage)),
+      pinnedDirection: Boolean(directionIsPinned),
       direction: { actorId: direction.actorId, receiverId: direction.receiverId },
       stateBefore: structuredClone(ctx.characterState)
     }
@@ -219,32 +220,50 @@ export function generateStages(items, baseCtx, anchorChoice, slotsByStage = { 1:
 
       if (isAnchorSlot) {
         const check = evaluateEligibility(anchorChoice.item, ctx);
+        const reservedExclusions = items
+          .filter(item => item.id !== anchorChoice.item.id)
+          .map(item => ({ itemId: item.id, rejections: [{ stage: "anchor", ruleId: "anchor.reserved_slot", detail: `Slot is reserved for main anchor ${anchorChoice.item.id}` }] }));
+        const anchorSelfExclusion = check.eligible ? [] : [{ itemId: anchorChoice.item.id, rejections: check.rejections }];
+        const anchorExcluded = [...reservedExclusions, ...anchorSelfExclusion];
         const anchorDiagnostics = {
-          totalPool: 1,
+          slotMode: "anchor_reserved",
+          totalPool: items.length,
           eligiblePool: check.eligible ? 1 : 0,
-          excludedCount: check.eligible ? 0 : 1,
-          topRejections: check.eligible ? [] : summarizeRejections([{ itemId: anchorChoice.item.id, rejections: check.rejections }]),
+          excludedCount: anchorExcluded.length,
+          topRejections: summarizeRejections(anchorExcluded).slice(0, 5),
           forcedItemId: null,
           pinnedDirection: Boolean(anchorChoice.direction),
           direction: { actorId: direction.actorId, receiverId: direction.receiverId },
           stateBefore: structuredClone(state)
         };
         if (!check.eligible) {
-          results.push({ stage, slotIndex, kind: "anchor-error", item: anchorChoice.item, rejections: check.rejections, state: structuredClone(state), direction, diagnostics: anchorDiagnostics });
+          results.push({ stage, slotIndex, kind: "anchor-error", item: anchorChoice.item, rejections: check.rejections, excluded: anchorExcluded, candidates: [], state: structuredClone(state), direction, diagnostics: anchorDiagnostics });
           slotIndex++;
           continue;
         }
-        const chosen = { item: anchorChoice.item, score: scoreItem(anchorChoice.item, { ...ctx, anchor: null }) };
+        const anchorScore = scoreItem(anchorChoice.item, { ...ctx, anchor: null });
+        const chosen = { item: anchorChoice.item, score: anchorScore };
         if (chosen.item.roleShape !== "mutual" && binding.mode === "directed") binding = direction.binding;
         state = applyMobilityEffects(chosen.item, direction, state);
         selectedIds.add(chosen.item.id);
         selectedItems.push(chosen.item);
-        results.push({ stage, slotIndex, kind: "main", ...chosen, seedKey: "anchor", state: structuredClone(state), direction, diagnostics: anchorDiagnostics });
+        results.push({
+          stage,
+          slotIndex,
+          kind: "main",
+          ...chosen,
+          candidates: [{ item: anchorChoice.item, score: anchorScore, weight: anchorScore.weight }],
+          excluded: anchorExcluded,
+          seedKey: "anchor",
+          state: structuredClone(state),
+          direction,
+          diagnostics: anchorDiagnostics
+        });
         slotIndex++;
         continue;
       }
 
-      const draw = drawOne(items, ctx, slotIndex, direction, { stage, local }, slotsByStage, forcedItemId);
+      const draw = drawOne(items, ctx, slotIndex, direction, { stage, local }, slotsByStage, forcedItemId, directionIsPinned);
       if (!draw.chosen) {
         results.push({ stage, slotIndex, kind: "empty", candidates: draw.candidates, excluded: draw.excluded, seedKey: draw.key, state: structuredClone(state), direction, forcedItemId, diagnostics: draw.diagnostics });
         slotIndex++;
@@ -265,6 +284,7 @@ export function generateStages(items, baseCtx, anchorChoice, slotsByStage = { 1:
         slotIndex,
         kind: nonAnchorKind(stage),
         ...chosen,
+        candidates: draw.candidates,
         seedKey: draw.key,
         state: structuredClone(state),
         direction,
