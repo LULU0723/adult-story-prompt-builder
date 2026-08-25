@@ -3,7 +3,7 @@ import { deriveProviders } from './providers.js';
 import { makeDirectedBinding } from './binding.js';
 import { chooseAnchor } from './anchor.js';
 import { generateStages } from './stage.js';
-import { compileDumbPrompt } from './compiler-dumb.js';
+import { compileStoryPrompt } from './compiler-v01.js';
 
 const items = await fetch('./data/adult-items.json').then(r => r.json());
 const validation = validateDataset(items);
@@ -35,6 +35,16 @@ const characterState = Object.fromEntries(characters.map(character => [character
 const binding = makeDirectedBinding(characters[0].id, characters[1].id);
 const slotsByStage = { 1: 1, 2: 1, 3: 1 };
 
+const storyConfig = {
+  length: 'short',
+  opening: 'direct',
+  pace: 'quick_escalation',
+  writingStyle: 'character_driven',
+  lexicalDirectness: 'balanced',
+  adultContentShare: 'medium',
+  descriptionFocus: 'interaction'
+};
+
 function generate(masterSeed = 'demo-001', userMaxIntensity = 3) {
   const baseCtx = {
     dataVersion: DATA_VERSION,
@@ -59,11 +69,10 @@ function generate(masterSeed = 'demo-001', userMaxIntensity = 3) {
   const anchorResult = chooseAnchor(items, baseCtx);
   if (!anchorResult.chosen) return { error: 'No reachable anchor', anchorResult };
   const generation = generateStages(items, baseCtx, anchorResult.chosen, slotsByStage);
-  const byId = Object.fromEntries(characters.map(c => [c.id, c]));
   return {
     anchor: anchorResult.chosen,
     generation,
-    prompt: compileDumbPrompt(generation, byId)
+    prompt: compileStoryPrompt({ generation, characters, sceneConfig, storyConfig })
   };
 }
 
