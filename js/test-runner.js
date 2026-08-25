@@ -1,9 +1,9 @@
 import { DATA_VERSION, validateDataset } from './schema.js';
 import { deriveProviders } from './providers.js';
-import { makeDirectedBinding } from './binding.js';
+import { makeDirectedBinding, makeEgalitarianBinding, resolveDirection } from './binding.js';
 import { chooseAnchor } from './anchor.js';
 import { generateStages } from './stage.js';
-import { evaluateEligibility } from './eligibility.js';
+import { evaluateEligibility, applyMobilityEffects } from './eligibility.js';
 
 const items = await fetch('./data/adult-items.json').then(r => r.json());
 
@@ -24,6 +24,7 @@ function makeFixtureContext(masterSeed, sourceItems = items) {
   const slotsByStage = { 1: 1, 2: 1, 3: 1 };
   return {
     items: sourceItems,
+    characters,
     ctx: {
       dataVersion: DATA_VERSION,
       masterSeed,
@@ -113,6 +114,31 @@ export function runRegressionSuite() {
   const unsupported = { ...base, id: 'test_group_shape', roleShape: 'group' };
   const groupResult = evaluateEligibility(unsupported, { ...ctx, stage: 1 });
   assert(!groupResult.eligible && groupResult.rejections.some(r => r.ruleId === 'roleShape.unsupported'), 'roleShape regression', failures);
+
+  const egalitarian = makeEgalitarianBinding(['lin', 'shuang']);
+  const egalitarianDirection = resolveDirection(egalitarian, {
+    dataVersion: DATA_VERSION,
+    masterSeed: 'real-id-check',
+    slot: 0,
+    reroll: 0
+  });
+  assert(['lin', 'shuang'].includes(egalitarianDirection.actorId), 'egalitarian actor must use real character id', failures);
+  assert(['lin', 'shuang'].includes(egalitarianDirection.receiverId), 'egalitarian receiver must use real character id', failures);
+
+  const restraint = items.find(item => item.id === 'light_restraint');
+  const moved = applyMobilityEffects(restraint, egalitarianDirection, ctx.characterState);
+  assert(!Object.prototype.hasOwnProperty.call(moved, 'A') && !Object.prototype.hasOwnProperty.call(moved, 'B'), 'mobility must not create ghost A/B state keys', failures);
+
+  const roleSwitch = items.find(item => item.id === 'role_reversal');
+  const egalitarianRoleSwitch = evaluateEligibility(roleSwitch, {
+    ...ctx,
+    stage: 2,
+    actorId: egalitarianDirection.actorId,
+    receiverId: egalitarianDirection.receiverId,
+    binding: egalitarian,
+    roleSwitchUsed: false
+  });
+  assert(!egalitarianRoleSwitch.eligible && egalitarianRoleSwitch.rejections.some(r => r.ruleId === 'roleSwitch.requires_directed'), 'roleSwitch must be excluded in egalitarian mode', failures);
 
   return {
     passed: failures.length === 0,
