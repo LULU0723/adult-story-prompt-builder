@@ -84,6 +84,7 @@ function describeCharacter(character) {
   if (character.archetype) parts.push(`archetype=${character.archetype}`);
   if (character.relationshipRole) parts.push(`relationshipRole=${character.relationshipRole}`);
   if (character.rolePreference) parts.push(`rolePreference=${character.rolePreference}`);
+  if (character.narrativeNote) parts.push(`note=${character.narrativeNote}`);
   if (safeArray(character.anatomy).length) parts.push(`anatomy=[${character.anatomy.join(', ')}]`);
   if (safeArray(character.equipment).length) parts.push(`equipment=[${character.equipment.join(', ')}]`);
   if (character.traits && typeof character.traits === 'object') {
