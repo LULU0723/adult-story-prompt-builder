@@ -8,6 +8,14 @@ import { compileDumbPrompt } from './compiler-dumb.js';
 const items = await fetch('./data/adult-items.json').then(r => r.json());
 const validation = validateDataset(items);
 
+if (validation.errors.length > 0) {
+  document.querySelector('#schema').textContent = JSON.stringify(validation, null, 2);
+  document.querySelector('#result').textContent = 'Dataset validation failed. Generation stopped.';
+  document.querySelector('#prompt').textContent = 'Fix schema errors before running the engine.';
+  document.querySelector('#generate').disabled = true;
+  throw new Error(`Dataset validation failed with ${validation.errors.length} error(s)`);
+}
+
 const characters = [
   {
     id: 'A', displayName: '角色A', adult: true, gender: 'female', presentation: 'androgynous', archetype: 'cold',
@@ -23,8 +31,9 @@ const characters = [
 
 const sceneConfig = { location: 'bedroom', privacy: 'private', props: ['mirror'] };
 const providers = deriveProviders(characters, sceneConfig);
-const characterState = { A: { mobility: 'free' }, B: { mobility: 'free' } };
-const binding = makeDirectedBinding('A', 'B');
+const characterState = Object.fromEntries(characters.map(character => [character.id, { mobility: 'free' }]));
+const binding = makeDirectedBinding(characters[0].id, characters[1].id);
+const slotsByStage = { 1: 1, 2: 1, 3: 1 };
 
 function generate(masterSeed = 'demo-001', userMaxIntensity = 3) {
   const baseCtx = {
@@ -33,21 +42,23 @@ function generate(masterSeed = 'demo-001', userMaxIntensity = 3) {
     userMaxIntensity,
     providers,
     characterState,
-    actorId: 'A',
-    receiverId: 'B',
+    actorId: characters[0].id,
+    receiverId: characters[1].id,
+    participantCount: characters.length,
     binding,
     minAnchorStage: 2,
     maxAnchorStage: 3,
+    slotsByStage,
     selectedIds: new Set(),
     selectedItems: [],
     preferredTags: new Set(['control']),
-    permissionState: 'allowed',
+    permissionByItem: {},
     rerollCounts: [0,0,0]
   };
 
   const anchorResult = chooseAnchor(items, baseCtx);
   if (!anchorResult.chosen) return { error: 'No reachable anchor', anchorResult };
-  const generation = generateStages(items, baseCtx, anchorResult.chosen, {1:1, 2:1, 3:1});
+  const generation = generateStages(items, baseCtx, anchorResult.chosen, slotsByStage);
   const byId = Object.fromEntries(characters.map(c => [c.id, c]));
   return {
     anchor: anchorResult.chosen,
