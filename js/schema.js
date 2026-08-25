@@ -4,6 +4,7 @@ export const ROLE_SHAPES_V01 = new Set(["directed", "mutual"]);
 export const STAGES = new Set([1, 2, 3]);
 export const MOBILITY = ["immobilized", "restricted", "partial", "free"];
 export const TRAIT_LEVELS = new Set(["very_low", "low", "mid", "high", "very_high"]);
+export const PERMISSION_STATES = new Set(["allowed", "no_recommend", "disabled"]);
 
 export function mobilityRank(value) {
   const index = MOBILITY.indexOf(value);
@@ -16,7 +17,15 @@ export function validateRequirement(req, path = "requirement") {
   if (!req || typeof req !== "object") return [`${path} must be an object`];
   if (!req.kind || typeof req.kind !== "string") errors.push(`${path}.kind is required`);
   if (!Array.isArray(req.spec) || req.spec.length === 0) errors.push(`${path}.spec must be a non-empty array`);
+  else if (req.spec.some(value => typeof value !== "string" || !value)) errors.push(`${path}.spec values must be non-empty strings`);
   return errors;
+}
+
+export function validateMobilityRule(rule, path) {
+  if (rule == null) return [];
+  if (typeof rule !== "string") return [`${path} must be a string or null`];
+  const match = /^(min|max|eq):(immobilized|restricted|partial|free)$/.exec(rule);
+  return match ? [] : [`${path} has invalid mobility rule '${rule}'`];
 }
 
 export function validateItem(item) {
@@ -37,11 +46,34 @@ export function validateItem(item) {
   if (item?.defaultIntensity < item?.intensityMin || item?.defaultIntensity > item?.intensityMax) {
     errors.push(`${item?.id ?? "item"}: defaultIntensity outside range`);
   }
+  if (!Number.isInteger(item?.minParticipants) || item.minParticipants < 1) {
+    errors.push(`${item?.id ?? "item"}: minParticipants must be a positive integer`);
+  }
+  if (!PERMISSION_STATES.has(item?.defaultStatus)) {
+    errors.push(`${item?.id ?? "item"}: defaultStatus must be allowed/no_recommend/disabled`);
+  }
+  if (typeof item?.promptTemplate !== "string" || !item.promptTemplate.trim()) {
+    errors.push(`${item?.id ?? "item"}: promptTemplate is required`);
+  } else if (item.roleShape === "directed") {
+    if (!item.promptTemplate.includes("{actor}")) errors.push(`${item.id}: directed promptTemplate must contain {actor}`);
+    if (!item.promptTemplate.includes("{receiver}")) errors.push(`${item.id}: directed promptTemplate must contain {receiver}`);
+  } else if (item.roleShape === "mutual") {
+    if (item.promptTemplate.includes("{actor}") || item.promptTemplate.includes("{receiver}")) {
+      errors.push(`${item.id}: mutual promptTemplate must not use directional {actor}/{receiver} placeholders`);
+    }
+  }
 
   for (const role of ["actor", "receiver", "scene"]) {
     const reqs = item?.requirements?.[role] ?? [];
     if (!Array.isArray(reqs)) errors.push(`${item?.id ?? "item"}: requirements.${role} must be an array`);
     else reqs.forEach((req, i) => errors.push(...validateRequirement(req, `${item.id}.requirements.${role}[${i}]`)));
+  }
+
+  errors.push(...validateMobilityRule(item?.requiresMobility?.actor, `${item?.id ?? "item"}.requiresMobility.actor`));
+  errors.push(...validateMobilityRule(item?.requiresMobility?.receiver, `${item?.id ?? "item"}.requiresMobility.receiver`));
+  for (const [role, value] of Object.entries(item?.setsMobility ?? {})) {
+    if (!new Set(["actor", "receiver"]).has(role)) errors.push(`${item.id}: setsMobility role '${role}' is unsupported`);
+    if (!MOBILITY.includes(value)) errors.push(`${item.id}: setsMobility.${role} has invalid value '${value}'`);
   }
 
   if (item?.roleSwitch && !item.stageHints.some(stage => stage >= 2)) {
