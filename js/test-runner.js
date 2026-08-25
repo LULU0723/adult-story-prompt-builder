@@ -1,4 +1,4 @@
-import { DATA_VERSION, validateDataset, validateItem } from './schema.js';
+import { DATA_VERSION, SCHEMA_ERROR_CODES, validateDataset, validateItem } from './schema.js';
 import { deriveProviders } from './providers.js';
 import { makeDirectedBinding, makeEgalitarianBinding } from './binding.js';
 import { chooseAnchor } from './anchor.js';
@@ -50,6 +50,7 @@ function signature(result){
   });
 }
 function assert(condition,message,failures){if(!condition)failures.push(message);}
+function hasSchemaCode(errors, code){return errors.some(error=>error.startsWith(`[${code}] `));}
 
 const MATRIX=[
   {name:'directed-111-i3-ff',bindingMode:'directed',slotsByStage:{1:1,2:1,3:1},intensity:3,profile:'ff'},
@@ -135,10 +136,10 @@ export function runRegressionSuite(){
     assert(!groupResult.eligible&&groupResult.rejections.some(r=>r.ruleId==='roleShape.unsupported'),'roleShape regression',failures);
 
     const badSwitch={...base,id:'test_switch_anchor',roleSwitch:true,anchorSuitability:1,stageHints:[2],roleShape:'directed'};
-    assert(validateItem(badSwitch).errors.some(e=>e.includes('roleSwitch items cannot be anchors')),'schema must reject roleSwitch anchor',failures);
+    assert(hasSchemaCode(validateItem(badSwitch).errors,SCHEMA_ERROR_CODES.ROLE_SWITCH_ANCHOR),'schema must reject roleSwitch anchor',failures);
 
     const badMutualState={...base,id:'test_mutual_state',roleShape:'mutual',anchorSuitability:0,promptTemplate:'雙方互動',setsMobility:{receiver:'restricted'}};
-    assert(validateItem(badMutualState).errors.some(e=>e.includes('mutual items cannot set asymmetric mobility')),'schema must reject mutual asymmetric mobility',failures);
+    assert(hasSchemaCode(validateItem(badMutualState).errors,SCHEMA_ERROR_CODES.MUTUAL_ASYMMETRIC_MOBILITY),'schema must reject mutual asymmetric mobility',failures);
   }catch(error){summary.runtimeExceptions++;failures.push(`eligibility/schema regression exception: ${error?.stack??error}`);}
 
   return {passed:failures.length===0,summary,failures:failures.slice(0,200)};
