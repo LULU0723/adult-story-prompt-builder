@@ -140,7 +140,7 @@ export function runCoverage(){
       avgEligiblePool:drawableSlots?eligiblePoolTotal/drawableSlots:0,
       avgEligiblePoolByStage:Object.fromEntries(Object.entries(stagePool).map(([stage,value])=>[stage,value.slots?value.total/value.slots:0])),
       mobilityChangedRuns,
-      mobilityRunRatio:RUNS_PER_CONFIG?mobilityChangedRuns/RUNS_PER_CONFIG:0,
+      mobilityRunRatio:anchorsFound?mobilityChangedRuns/anchorsFound:0,
       nonRepeatableRejections:duplicateRejects,
       preservationRejections:preservationRejects
     };
@@ -164,7 +164,9 @@ export function runCoverage(){
     metricNotes:{
       deadItems:'Never observed as an anchor candidate, normal draw candidate, or selected item in any canonical run.',
       avgEligiblePool:'Mean normal-slot candidate count after hard eligibility and anchor preservation. Read per-stage values to detect stage-specific pool collapse.',
-      mobility:'Compare mobilityRunRatio only between configs with the same slotsByStage. Reassess mobility only if changing-item ratio <10%, fixed-slot run ratio <20%, and preservation rejections are approximately zero.'
+      mobility:'Compare mobilityRunRatio only between configs with the same slotsByStage. The denominator is anchorsFound so no-anchor runs do not dilute the ratio. Reassess mobility only if changing-item ratio <10%, fixed-slot run ratio <20%, and preservation rejections are approximately zero.',
+      nonRepeatableRejections:'Counts duplicate-rule rejections for items already selected earlier in the same generation. This reflects filled-slot history and is not a candidate-pool health metric; use avgEligiblePool for pool health.',
+      selectionCounts:'Absolute selections across the current canonical config set. Do not compare raw counts across revisions that add, remove, or materially change configs; compare within the same config set instead.'
     },
     deadItems,
     neverSelected,
