@@ -20,7 +20,7 @@ function hasOwn(value, key) {
   return value != null && Object.prototype.hasOwnProperty.call(value, key);
 }
 
-export function evaluateQualityGate(regression, coverage, sourceItems = []) {
+export function evaluateQualityGate(regression, coverage, sourceItems = null) {
   const hardFailures = [];
   const warnings = [];
 
@@ -37,7 +37,20 @@ export function evaluateQualityGate(regression, coverage, sourceItems = []) {
     }
   }
 
-  const configs = coverage?.byConfig && typeof coverage.byConfig === 'object' ? coverage.byConfig : {};
+  if (!Array.isArray(coverage?.validation?.errors)) {
+    pushIssue(hardFailures, 'gate.malformed_coverage', 'coverage.validation.errors missing or invalid.', { field: 'validation.errors' });
+  }
+  if (!Array.isArray(coverage?.deadItems)) {
+    pushIssue(hardFailures, 'gate.malformed_coverage', 'coverage.deadItems missing or invalid.', { field: 'deadItems' });
+  }
+  if (!Array.isArray(coverage?.neverSelected)) {
+    pushIssue(hardFailures, 'gate.malformed_coverage', 'coverage.neverSelected missing or invalid.', { field: 'neverSelected' });
+  }
+  if (!Array.isArray(sourceItems) || sourceItems.length === 0) {
+    pushIssue(hardFailures, 'gate.malformed_items', 'Fixture data is missing or empty.');
+  }
+
+  const configs = coverage?.byConfig && typeof coverage.byConfig === 'object' && !Array.isArray(coverage.byConfig) ? coverage.byConfig : {};
   if (Object.keys(configs).length === 0) {
     pushIssue(hardFailures, 'gate.no_configs', 'Coverage produced no canonical configs.');
   }
@@ -80,13 +93,15 @@ export function evaluateQualityGate(regression, coverage, sourceItems = []) {
         continue;
       }
       const pool = Number(stagePools[stage]);
-      if (pool < 4) {
+      if (!Number.isFinite(pool)) {
+        pushIssue(hardFailures, 'gate.malformed_config', `${name}: avgEligiblePoolByStage.${stage} is not numeric.`, { config: name, field: `avgEligiblePoolByStage.${stage}` });
+      } else if (pool < 4) {
         pushIssue(warnings, 'coverage.stage_pool_narrow', `${name}: Stage ${stage} avgEligiblePool ${pool.toFixed(2)} < 4.`, { config: name, stage: Number(stage), value: pool });
       }
     }
 
-    const s1 = Number(stagePools['1']);
-    const s3 = Number(stagePools['3']);
+    const s1 = Number(stagePools?.['1']);
+    const s3 = Number(stagePools?.['3']);
     if (Number.isFinite(s1) && Number.isFinite(s3) && s1 > 0 && s3 / s1 < 0.5) {
       pushIssue(warnings, 'coverage.stage3_ratio', `${name}: S3/S1 ${(s3 / s1).toFixed(2)} < 0.50.`, { config: name, value: s3 / s1 });
     }
@@ -96,9 +111,11 @@ export function evaluateQualityGate(regression, coverage, sourceItems = []) {
     }
   }
 
-  for (const [cluster, count] of clusterCounts(sourceItems)) {
-    if (cluster !== '(none)' && count === 1) {
-      pushIssue(warnings, 'fixture.singleton_cluster', `Cluster '${cluster}' contains only one item.`, { cluster });
+  if (Array.isArray(sourceItems)) {
+    for (const [cluster, count] of clusterCounts(sourceItems)) {
+      if (cluster !== '(none)' && count === 1) {
+        pushIssue(warnings, 'fixture.singleton_cluster', `Cluster '${cluster}' contains only one item.`, { cluster });
+      }
     }
   }
 
@@ -117,7 +134,7 @@ export function evaluateQualityGate(regression, coverage, sourceItems = []) {
       hardFailureCount: hardFailures.length,
       warningCount: warnings.length,
       regressionPassed: regression?.passed === true,
-      items: coverage?.totals?.items ?? sourceItems.length,
+      items: coverage?.totals?.items ?? (Array.isArray(sourceItems) ? sourceItems.length : 0),
       configs: coverage?.totals?.configs ?? 0
     }
   };
