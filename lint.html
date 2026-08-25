@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fixture Lint</title></head>
+<body>
+  <h1>Fixture Lint</h1>
+  <pre id="out">Loading…</pre>
+  <script type="module">
+    import { validateDataset } from './js/schema.js';
+    const out = document.querySelector('#out');
+    try {
+      const items = await fetch('./data/adult-items.json').then(r => r.json());
+      const result = validateDataset(items);
+      out.textContent = JSON.stringify({ count: items.length, ...result }, null, 2);
+    } catch (error) {
+      out.textContent = error.stack || String(error);
+    }
+  </script>
+</body>
+</html>
