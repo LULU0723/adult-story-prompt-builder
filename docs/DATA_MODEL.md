@@ -1,267 +1,363 @@
-# Data Model v0.1
+# Data Model v0.2
 
-## Design rule
+This document is the current source of truth for the v0.1 implementation.
 
-Separate content data, rule data, and prompt logic.
+## Core design principles
 
-- Content data: plays, styles, archetypes, scenes, contexts.
-- Rule data: compatibility, requirements, weights, intensity, role constraints.
-- Prompt logic: converts structured selections into executable LLM instructions.
+1. Adult fictional characters only.
+2. Gender/presentation are narrative fields and never determine physical eligibility.
+3. Physical feasibility (Affordance), user allowance (Permission), and stylistic suitability (Fitness) are separate layers.
+4. Main/Secondary/Accent are runtime importance labels, not narrative order.
+5. Narrative order is controlled by stage hints and generation order.
+6. Random selection occurs only inside the hard-valid candidate set.
+7. Item IDs are stable slugs; deprecated IDs remain addressable.
 
-## Character profile
+## Character
 
-Suggested shape:
-
-```json
+```js
 {
-  "id": "char_a",
-  "name": "",
-  "adult": true,
-  "gender": "female",
-  "presentation": [],
-  "anatomy": {
-    "penis": false,
-    "vagina": true,
-    "breasts": true
+  id: "A",
+  displayName: "A",
+  adult: true,
+
+  // Narrative-only fields. Engines must not infer anatomy from these.
+  gender: "female",
+  presentation: "androgynous",
+  archetype: "cold_professional",
+
+  // Physical facts used by deriveProviders().
+  anatomy: ["vagina", "breasts", "anus", "mouth", "hands"],
+
+  // Character-owned equipment only. A device that can satisfy an actor-side
+  // requirement must have an owner.
+  equipment: ["strap_on"],
+
+  // Five-level soft traits. Seed does not jitter these values.
+  traits: {
+    dominance: "low",
+    initiative: "mid",
+    shame: "high"
   },
-  "archetype": {
-    "primary": "cool_beauty",
-    "secondary": ["restrained", "competitive"]
-  },
-  "traits": {
-    "initiative": 35,
-    "control": 60,
-    "shame": 65,
-    "dependency": 25,
-    "sensorySensitivity": 55
-  },
-  "sexualRolePreference": ["switch"],
-  "appearance": {
-    "body": "balanced",
-    "vibe": "cool",
-    "hair": "long",
-    "clothingStyle": "formal",
-    "custom": ""
-  },
-  "locked": []
-}
-```
 
-Gender, presentation, anatomy, archetype, and interaction role are independent dimensions.
-
-## Adult play item
-
-Suggested canonical shape:
-
-```json
-{
-  "id": "orgasm_delay",
-  "label": "延後高潮",
-  "type": "play",
-  "category": "pace_control",
-  "subcategory": "orgasm_control",
-  "description": "給使用者看的短說明",
-  "llmInstruction": "給 Prompt Compiler 使用的可執行規則",
-  "baseIntensity": 2,
-  "intensityRange": [1, 3],
-  "tags": ["control", "teasing", "pace"],
-  "slotWeights": {
-    "main": 1.4,
-    "secondary": 1.2,
-    "accent": 0.1
-  },
-  "baseWeight": 1.0,
-  "requirements": {
-    "roleCount": {"min": 2, "max": 2},
-    "actorCapabilities": [],
-    "receiverCapabilities": [],
-    "equipment": [],
-    "sceneTags": [],
-    "minimumLength": "ultra-short"
-  },
-  "prefersTags": ["dominance", "permission"],
-  "forbidsTags": [],
-  "hardConflicts": [],
-  "softConflicts": [],
-  "recommendedWith": [],
-  "manualOnly": false,
-  "defaultStatus": "allowed"
-}
-```
-
-## Item types
-
-Initial enum:
-
-- play
-- fetish
-- relationship_modifier
-- scene_modifier
-- clothing_modifier
-- context_modifier
-- character_modifier
-
-The same canonical item should not be duplicated just because it appears in multiple UI categories. Cross-list items through tags or aliases.
-
-## Capability / requirement model
-
-Hard filtering should operate on capabilities and requirements, not broad relationship labels such as `BL`, `GL`, or `MF`.
-
-Examples of capabilities:
-
-- has_penis
-- has_vagina
-- has_breasts
-- can_penetrate_with_toy
-- can_receive_vaginal
-- can_receive_anal
-- can_dominate
-- can_submit
-- can_observe
-
-A play may require explicit actor/receiver capabilities.
-
-Example:
-
-```json
-{
-  "requirements": {
-    "actorCapabilities": ["has_penis"],
-    "receiverCapabilities": ["has_vagina"]
+  locks: {
+    anatomy: false,
+    traits: false
   }
 }
 ```
 
-A toy-based alternative can instead require equipment and a compatible receiver without requiring actor anatomy.
+Allowed trait scale:
 
-## Role assignment
+- very_low
+- low
+- mid
+- high
+- very_high
 
-Do not evaluate only whether a play is globally valid. Resolve who acts and who receives.
+Archetypes are UI presets. They may initialize traits, but once applied the runtime engine reads the resulting traits, not the archetype label.
 
-Possible interaction roles:
+## Scene Config
 
-- actor
-- receiver
-- dominant
-- submissive
-- observer
-- initiator
+Scene Config is immutable during a v0.1 generation.
 
-Role assignment is influenced by character preferences and locked settings. Preference mismatches lower weight; hard capability mismatches remove the candidate.
-
-## Compatibility levels
-
-Use both generic tag rules and sparse item-level overrides.
-
-Suggested semantic scale:
-
-- +2 strongly recommended
-- +1 compatible
-- 0 neutral
-- -1 unusual but allowed
-- hard conflict = excluded
-
-Do not create a full NxN matrix for every item. Most compatibility should be inferred from tags and requirements. Maintain explicit pair overrides only where necessary.
-
-## Disable state
-
-Each item has one user-facing state:
-
-- allowed
-- no_recommend
-- disabled
-
-Seed behavior:
-
-- allowed: normal weighted candidate
-- no_recommend: excluded from auto-generation but manually selectable
-- disabled: unavailable to presets and random generation
-
-## Slot model
-
-Normal mode:
-
-- main: exactly 1
-- secondary: 0-2
-- accent: 0-3
-
-Each item uses slot-specific weights rather than only booleans. A mirror, for example, should have near-zero main weight but high accent weight.
-
-## Intensity model
-
-Use:
-
-- `baseIntensity`: normal expression level
-- `intensityRange`: supported adjustable range
-
-This prevents duplicating light/medium/heavy variants of the same concept.
-
-Heavy mode changes play complexity and intensity weighting, not lexical explicitness.
-
-## Random score model
-
-Candidate score can be composed from:
-
-```text
-FinalScore =
-  BaseWeight
-  * SlotWeight
-  * IntensityMatch
-  * CategoryMatch
-  * StyleMatch
-  * CharacterMatch
-  * ContextMatch
-  * CompatibilityModifier
-  * DiversityModifier
-  * UserPreference
+```js
+{
+  location: "bedroom",
+  privacy: "private", // public | semi | private
+  props: ["mirror"]
+}
 ```
 
-Exact coefficients remain implementation-tunable.
+Rules:
 
-## Diversity control
+- `privacy` belongs only here.
+- Items must not directly filter on `privacy`; they depend on providers derived from Scene Config.
+- Character-owned equipment and scene props are distinct. Equipment that supplies an actor-side affordance must have a character owner.
 
-Repeated tags should receive diminishing weight unless the user explicitly requests a dense thematic cluster.
+## Providers / Affordances
 
-Example default concept:
+`deriveProviders(characters, sceneConfig)` is a pure function. Its input contract must not require `gender`, `presentation`, or relationship labels.
 
-- first occurrence: 1.00
-- second same-tag occurrence: 0.70
-- third same-tag occurrence: 0.40
+Example output:
 
-This prevents pseudo-variety such as command + permission + posture command + naming command all appearing together by default.
+```js
+[
+  { owner: "A", kind: "penetrator", spec: "manual" },
+  { owner: "A", kind: "penetrator", spec: "toy" },
+  { owner: "B", kind: "receptacle", spec: "vaginal" },
+  { owner: "scene", kind: "mirror", spec: "available" }
+]
+```
 
-## Deterministic seeded draw
+Providers answer only: "is the required physical/context resource present, and who owns/provides it?"
 
-Use a deterministic PRNG seeded from a user-provided or generated string/integer.
+They do not express user consent/preferences or narrative suitability.
 
-Selection order:
+## Permission
 
-1. build valid candidates
-2. score candidates
-3. weighted draw for main
-4. add selected item to current set
-5. recalculate compatibility and diversity
-6. draw secondary slots sequentially
-7. recalculate
-8. draw accent slots sequentially
-9. validation pass
+Every play item has a user-facing state:
 
-Never draw all slots independently before compatibility evaluation.
+- `allowed`: normal random candidate.
+- `no_recommend`: manually selectable, excluded from automatic randomization.
+- `disabled`: unavailable to randomization and presets.
 
-## Final validation
+Locks override randomization. Hard constraints are never relaxed by randomness modes.
 
-Validate at least:
+## Fitness / soft preference
 
-- all characters are adults
-- role count requirements
-- actor/receiver anatomy requirements
-- equipment requirements
-- hard conflicts
-- locked settings
-- story-length requirements
-- scene requirements
-- maximum slot counts
-- duplicate canonical item IDs
-- excessive tag repetition
+Soft fitness affects weighting only. It must never silently exclude an item.
 
-If a seeded draw fails validation, advance deterministically within the same PRNG stream rather than switching to uncontrolled randomness.
+v0.1 scoring contributions are intentionally small:
+
+- intensity fit
+- explicit user tag preference
+- anchor affinity
+- diversity penalty
+
+Style/character/context fit are reserved fields for later versions but are not active v0.1 score factors.
+
+## Character State
+
+v0.1 dynamic state is per character, not scene-global.
+
+```js
+{
+  A: { mobility: "free" },
+  B: { mobility: "free" }
+}
+```
+
+Mobility order:
+
+`free > partial > restricted > immobilized`
+
+v0.1 rule: mobility is monotonic/non-reversible during one generated scene. No release/unbind planner is implemented yet.
+
+Do not create a generic state-expression language in v0.1. Items use explicit mobility fields.
+
+## Scene Binding
+
+A scene has one binding mode:
+
+```js
+{ mode: "directed", dominant: "A", receptive: "B" }
+```
+
+or
+
+```js
+{ mode: "egalitarian" }
+```
+
+Directed mode persists until an explicit `roleSwitch` item occurs.
+
+Role switch rules in v0.1:
+
+- maximum one switch per generated scene;
+- switch is persistent for all subsequent items;
+- switch is allowed only in stages 2 or 3.
+
+Egalitarian mode uses seeded direction choice with anti-monopoly memory; it must avoid both permanent A-only initiation and mechanical ABAB alternation.
+
+## Play Item
+
+Canonical v0.1 shape:
+
+```js
+{
+  id: "play_example",
+  label: "Example",
+  type: "play",
+  category: "pace_control",
+  subcategory: "example",
+  cluster: "verbal_control",
+  tags: ["control", "teasing"],
+
+  description: "UI description",
+  promptTemplate: "{actor} 對 {receiver} ...",
+
+  roleShape: "directed", // directed | mutual in v0.1
+  roleSwitch: false,
+
+  requirements: {
+    actor: [
+      { kind: "penetrator", spec: ["manual", "toy"] }
+    ],
+    receiver: [
+      { kind: "receptacle", spec: ["vaginal", "anal"] }
+    ],
+    scene: []
+  },
+
+  minParticipants: 2,
+
+  // Actor/receiver refer to the effective binding at this narrative point.
+  requiresMobility: {
+    actor: "min:partial",
+    receiver: null
+  },
+  setsMobility: {
+    receiver: "restricted"
+  },
+
+  // Item may be valid at multiple stages.
+  stageHints: [2, 3],
+
+  // Static suitability for being selected as the scene anchor.
+  anchorSuitability: 0, // 0 | 1 | 2
+
+  intensityMin: 1,
+  intensityMax: 3,
+  defaultIntensity: 2,
+
+  baseWeight: 1,
+  defaultStatus: "allowed",
+  manualOnly: false,
+  repeatable: false,
+  deprecated: false
+}
+```
+
+### Requirement semantics
+
+- The array of requirements for one role is AND.
+- `spec: []` inside one requirement is OR.
+- Actor requirements must be satisfied by the actor's providers; receiver requirements by the receiver's providers. Do not combine providers across owners to satisfy one role.
+- `scene` requirements are satisfied only by owner `scene` providers.
+
+Example:
+
+```js
+actor: [
+  { kind: "penetrator", spec: ["manual", "toy"] },
+  { kind: "hands", spec: ["available"] }
+]
+```
+
+means `(penetrator manual OR toy) AND hands`, all owned by the actor.
+
+## Main Anchor / Importance
+
+`main`, `secondary`, and `accent` are runtime assignments.
+
+They must not be stored as a fixed item property.
+
+Items instead declare `anchorSuitability`:
+
+- 0: not suitable as the main anchor;
+- 1: allowed but not preferred;
+- 2: naturally suitable as a main anchor.
+
+The generator chooses the Main Anchor first, then builds the narrative around it.
+
+## Narrative stages
+
+v0.1 uses three coarse narrative stages:
+
+- Stage 1: setup / early escalation
+- Stage 2: escalation / transition
+- Stage 3: core / late interaction
+
+Items declare `stageHints: [1,2,3]` as a set of allowed stages rather than one fixed stage.
+
+Generation order equals narrative order so Character State can be used in filter-before-draw.
+
+## Anchor Reachability
+
+Selecting an anchor is valid only if the anchor can be reached from the initial Character State within the available pre-anchor slot budget.
+
+Two checks are required:
+
+1. Preservation: a preceding item may not move state into a condition from which the anchor becomes impossible under the v0.1 monotonic mobility model.
+2. Reachability: if the anchor requires a lower mobility state than the initial state, at least one available pre-anchor item must be able to enable that state. If no enabler is available, that anchor is not eligible.
+
+Pool-collapse lookahead is diagnostic-only in v0.1. It should generate Explain Panel warnings but should not become a hard exclusion rule until real generated samples justify it.
+
+## Intensity semantics
+
+The user's scene intensity is the maximum allowed play intensity, not an exact point match.
+
+Example:
+
+- user max intensity = 3
+- item range = 1..2 → eligible
+- item range = 2..4 → eligible at 2..3
+- item range = 4..4 → ineligible
+
+Rule:
+
+```text
+eligible iff item.intensityMin <= userMaxIntensity
+actual range = [item.intensityMin, min(item.intensityMax, userMaxIntensity)]
+```
+
+Intensity fit then weights items closer to the target more strongly, while still allowing lighter setup/accent items in heavier scenes.
+
+Play intensity remains independent from lexical explicitness.
+
+## Diversity
+
+Each item has exactly one manual semantic `cluster` for diversity control. Clusters model substitutability, not taxonomy.
+
+Question for assigning a cluster:
+
+> If the scene already contains one item from this cluster, would adding another often feel like the same idea repeated?
+
+Locked user items do not count toward automatic diversity penalties.
+
+## Deterministic seed model
+
+- stable item slugs only; never hash array indices;
+- seed state includes `dataVersion`;
+- independent streams for character/context/role/play/style;
+- local rerolls use a reroll count in the stream key;
+- Seed never changes anatomy, personality, or locked values.
+
+## Explain instrumentation
+
+Eligibility functions must return structured rejection information from day one:
+
+```js
+{
+  eligible: false,
+  rejections: [
+    { stage: "provider", ruleId: "receiver.receptacle.vaginal", detail: "..." }
+  ]
+}
+```
+
+Explain UI must support:
+
+- candidate pool funnel by stage/slot;
+- top exclusion reasons;
+- top candidate score contributions;
+- Character State snapshot;
+- seed key;
+- reverse query: why a specific item was excluded.
+
+## Coverage lint
+
+Canonical configurations must be run against fixtures to detect systematic data bias and dead items.
+
+Report at least:
+
+- eligible item count;
+- anchor-eligible count;
+- cluster coverage;
+- unreachable/dead item IDs;
+- percentage of generated test paths that actually change mobility.
+
+If mobility-changing items remain rare after 40+ representative fixtures, reassess whether Character State is worth keeping versus sparse explicit overrides.
+
+## Deferred from v0.1
+
+- reversible mobility / release planning;
+- 3+ participant random generation;
+- generic state expression language;
+- full pairwise compatibility matrix;
+- CSP/SAT/MaxSAT/A*/STRIPS planning;
+- embedding similarity;
+- personality seed jitter;
+- multiple randomness temperatures;
+- clothing as a hard state unless fixtures prove it necessary;
+- full narrative phase planner.
