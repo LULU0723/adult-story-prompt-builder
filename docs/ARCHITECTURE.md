@@ -28,6 +28,7 @@ Target:
 /
 ├─ index.html
 ├─ lint.html
+├─ test.html
 ├─ coverage.html
 ├─ css/
 │  └─ app.css
@@ -41,6 +42,7 @@ Target:
 │  ├─ anchor.js
 │  ├─ stage.js
 │  ├─ score.js
+│  ├─ test-runner.js
 │  ├─ compiler-dumb.js
 │  ├─ compiler.js
 │  ├─ explain.js
@@ -58,7 +60,8 @@ Target:
    ├─ PROJECT_SPEC.md
    ├─ DATA_MODEL.md
    ├─ TAXONOMY.md
-   └─ ARCHITECTURE.md
+   ├─ ARCHITECTURE.md
+   └─ EMPIRICAL_REVIEW_FIXES.md
 ```
 
 ## Responsibility boundaries
@@ -72,6 +75,8 @@ Responsibilities:
 - verify stable IDs;
 - validate `stageHints`, `anchorSuitability`, intensity ranges, role shapes;
 - validate requirement shape and OR `spec[]` values;
+- validate mobility rule strings;
+- validate `promptTemplate` directional placeholders;
 - reject unsupported v0.1 role shapes;
 - reject broken references;
 - detect duplicate IDs and obvious self-contradictions.
@@ -89,6 +94,8 @@ Responsibilities:
 - reroll-count derivation.
 
 No adult-domain rules belong here.
+
+Callers must present weighted candidates in stable slug order. JSON array order must never become part of seed semantics.
 
 ### `providers.js`
 
@@ -108,17 +115,19 @@ Hard validity only.
 
 Responsibilities:
 
-- Permission state;
+- per-item Permission state (`permissionByItem[item.id]`, falling back to `item.defaultStatus`);
 - participant count;
 - role-shape support;
 - provider/requirement satisfaction by the correct owner;
 - per-character mobility requirements;
 - stage eligibility;
 - duplicate/non-repeatable item exclusion;
-- role-switch budget;
+- role-switch budget and binding-mode support;
 - anchor reachability/preservation hooks.
 
 Every rejection returns structured `ruleId` instrumentation for Explain Panel use.
+
+Missing `characterState[id]` is a hard error. Do not silently assume `free` mobility for an unknown character ID.
 
 ### `binding.js`
 
@@ -131,7 +140,9 @@ Modes:
 
 Directed role switch is persistent and limited to once per scene.
 
-Egalitarian directed-item direction should use seeded anti-monopoly memory rather than rigid ABAB alternation.
+Egalitarian bindings store the actual two character IDs. The engine must never manufacture placeholder IDs such as `A` / `B` internally.
+
+Egalitarian directed-item direction should use seeded anti-monopoly memory rather than rigid ABAB alternation. Directional debt is committed only when a directional item is actually selected; mutual items and empty slots do not consume it.
 
 ### `anchor.js`
 
@@ -140,10 +151,12 @@ Selects and validates the Main Anchor.
 Responsibilities:
 
 - anchor eligibility via `anchorSuitability`;
-- allowed `stageHints`;
+- seeded selection among legal `stageHints`;
 - user locks;
-- reachability under available pre-anchor stage budget;
+- reachability under available pre-anchor stage/slot budget;
 - future preservation under monotonic mobility.
+
+If the anchor requires one mobility-changing enabler, the selected enabler identity and stage are carried forward to stage generation.
 
 Candidate-pool collapse is diagnostic-only in v0.1.
 
@@ -157,13 +170,18 @@ Generation order equals narrative order:
 choose anchor
 -> determine anchor stage
 -> generate pre-anchor stages in order
+-> preserve/force a required enabler at its last legal opportunity
 -> emit anchor at its stage position
 -> generate post-anchor slots
 ```
 
+The chosen anchor ID is excluded from all ordinary candidate pools. It may only appear through the dedicated Main Anchor emission path.
+
+Before accepting a pre-anchor candidate, the engine simulates its mobility effect and any persistent role switch. The candidate is excluded if the Main Anchor is no longer directly reachable or reachable through one remaining legal enabler.
+
 Character State is applied immediately after each selected item.
 
-Main/Secondary/Accent are runtime importance labels. They do not determine ordering.
+Main/Secondary/Accent are runtime importance labels. They do not determine ordering. The current v0.1 labeling rule is intentionally simple: Stage 2 non-anchor items are `secondary`; Stage 1/3 non-anchor items are `accent`.
 
 ### `score.js`
 
@@ -179,6 +197,8 @@ v0.1 contributions:
 Hard exclusions must never be encoded as zero scores.
 
 Scores should be additive contributions for Explain Panel readability. A weighted draw may convert total score to a positive weight internally.
+
+Anchor candidates are scored without self-anchor affinity.
 
 ### `compiler-dumb.js`
 
@@ -214,6 +234,20 @@ Developer-facing static page that loads fixtures and reports schema/data errors 
 
 Warnings should include vocabulary/cluster growth and deprecated/broken references. Avoid arbitrary hard taxonomy caps unless an actual integrity condition is violated.
 
+### `test.html`
+
+Browser regression gate for engine correctness.
+
+Before Coverage Lint is trusted or fixtures expand toward 40–60 items, the suite must verify at least:
+
+- 300 deterministic seeds;
+- chosen Main Anchor appears exactly once as `kind:"main"`;
+- zero `anchor-error` steps;
+- reversing JSON fixture order does not alter the generated signature;
+- participant-count filtering works;
+- unsupported role shapes are rejected;
+- egalitarian binding uses real character IDs and does not create ghost state keys.
+
 ### `coverage.html`
 
 Runs canonical two-character configurations to report:
@@ -224,6 +258,8 @@ Runs canonical two-character configurations to report:
 - dead items;
 - mobility-state utilization.
 
+Coverage results are not trusted until `test.html` is green; otherwise engine failures can be misdiagnosed as data-labeling bias.
+
 ## Generation pipeline
 
 ```text
@@ -233,104 +269,45 @@ Character Facts + Character Equipment + Scene Config
         ↓
 deriveProviders()
         ↓
-Permission Filter
+Per-item Permission Filter
         ↓
 Choose Scene Binding
         ↓
-Choose Main Anchor + Anchor Reachability
+Choose Main Anchor + Seeded Anchor Stage + Reachability
         ↓
 Initialize Character State
         ↓
 Generate Stage 1 → 2 → 3 in narrative order
         ↓
-For each slot:
+For each ordinary slot:
+  exclude Main Anchor ID
   hard eligibility
-  anchor preservation/reachability
+  simulate mobility / role switch
+  preserve Main Anchor reachability
+  force required enabler at last legal opportunity when needed
   soft score
   diversity
+  stable-sort candidates by slug
   seeded weighted draw
   apply per-character mobility effects
         ↓
-Final assertions
+Emit Main Anchor exactly once as kind:"main"
+        ↓
+Final assertions / regression invariants
         ↓
 Prompt compiler
 ```
 
 ## Intensity rule
 
-User intensity is the maximum allowed play intensity, not an exact-match filter.
+The user's selected play intensity is a maximum allowed intensity, not an exact point match.
 
-An item is hard eligible if `item.intensityMin <= userMaxIntensity`.
+An item is hard-eligible when `item.intensityMin <= userMaxIntensity`. Softer items remain available as setup/accent material in heavier scenes.
 
-Actual expression range is capped by the user's maximum. Lighter items remain available as setup/accent in heavier scenes.
+## Regression invariant
 
-Lexical explicitness is independent from play intensity.
+The empirical pre-fix review found Main Anchor loss in 131/300 seeds. That failure mode is now elevated to a formal invariant:
 
-## Character State rule
+> If `chooseAnchor()` returns a chosen anchor, `generateStages()` must emit that exact item exactly once with `kind:"main"`, with zero `anchor-error` steps.
 
-v0.1 only tracks per-character mobility:
-
-```text
-free > partial > restricted > immobilized
-```
-
-Mobility is monotonic/non-reversible in v0.1. Do not add a generic state framework until a second real dynamic state is proven necessary.
-
-## Main Anchor rule
-
-The Main Anchor is selected before stage filling.
-
-An anchor must be reachable from initial Character State within the available pre-anchor slot budget. A preceding candidate that makes the anchor impossible under the monotonic model must be excluded.
-
-If a selected candidate causes future pools to collapse severely, Explain Panel should warn. Pool-size thresholds are not hard constraints in v0.1.
-
-## Fixture strategy
-
-Do not fill the database evenly by taxonomy first. Stress the schema.
-
-Initial fixture mix should cover:
-
-- zero-requirement directed items;
-- mutual items;
-- anatomy-specific requirements;
-- generic provider alternatives;
-- equipment-dependent items;
-- scene-provider requirements;
-- mobility setters;
-- mobility requirements;
-- role switches;
-- participant-count exclusions;
-- dense same-cluster candidates;
-- wide/narrow intensity ranges.
-
-Only expand toward full taxonomy after these paths behave correctly.
-
-## Test strategy
-
-Unit-test objectively verifiable modules:
-
-- `rng.js` determinism and stream independence;
-- `providers.js` table-driven affordance derivation;
-- `eligibility.js` pass/fail plus rejection `ruleId`;
-- mobility comparisons/effects by character owner;
-- anchor reachability.
-
-Manual/Explain testing is appropriate for:
-
-- score coefficient taste;
-- cluster quality;
-- compiler prose quality;
-- egalitarian anti-monopoly constants;
-- UI polish.
-
-## Deferred
-
-- reversible restraints;
-- 3+ participant automatic generation;
-- planner/search algorithms;
-- generic state DSL;
-- embedding similarity;
-- full pair matrix;
-- multiple randomness modes;
-- clothing hard state until fixtures prove it useful;
-- API/backend integration.
+See `docs/EMPIRICAL_REVIEW_FIXES.md` for the measured pre-fix failure classes and accepted fixes.
