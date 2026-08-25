@@ -1,40 +1,59 @@
-# Architecture v0.1
+# Architecture v0.2
 
 ## Runtime
 
-Static GitHub Pages application. No backend, no database server, no authentication, no LLM API dependency.
+Static GitHub Pages application using Vanilla HTML/CSS/JS.
 
-## Proposed structure
+No backend, database server, authentication, framework, build step, or LLM API is required for v0.1.
+
+## v0.1 goals
+
+The first implementation is a schema/engine validation build, not the final 160–220 item content release.
+
+Target:
+
+- 40–60 representative fixtures eventually;
+- start with 8–12 fixtures for end-to-end validation;
+- deterministic seed engine;
+- two-character generation only;
+- provider-based hard eligibility;
+- per-character mobility state;
+- directed/egalitarian binding;
+- Main Anchor + 3 narrative stages;
+- Explain Panel and Coverage Lint.
+
+## Directory structure
 
 ```text
 /
 ├─ index.html
+├─ lint.html
+├─ coverage.html
 ├─ css/
 │  └─ app.css
 ├─ js/
 │  ├─ app.js
-│  ├─ state.js
-│  ├─ random.js
-│  ├─ compatibility.js
+│  ├─ schema.js
+│  ├─ rng.js
+│  ├─ providers.js
+│  ├─ eligibility.js
+│  ├─ binding.js
+│  ├─ anchor.js
+│  ├─ stage.js
+│  ├─ score.js
+│  ├─ compiler-dumb.js
 │  ├─ compiler.js
-│  └─ ui.js
+│  ├─ explain.js
+│  └─ state.js
 ├─ data/
 │  ├─ adult-categories.json
 │  ├─ adult-items.json
-│  ├─ compatibility.json
 │  ├─ presets.json
 │  ├─ styles.json
 │  ├─ character-presets.json
 │  ├─ story-frames.json
-│  └─ contexts.json
-├─ prompts/
-│  ├─ core.js
-│  ├─ character.js
-│  ├─ adult.js
-│  ├─ story.js
-│  ├─ style.js
-│  ├─ variation.js
-│  └─ output.js
+│  ├─ contexts.json
+│  └─ overrides.json
 └─ docs/
    ├─ PROJECT_SPEC.md
    ├─ DATA_MODEL.md
@@ -42,148 +61,276 @@ Static GitHub Pages application. No backend, no database server, no authenticati
    └─ ARCHITECTURE.md
 ```
 
-## Module responsibilities
+## Responsibility boundaries
 
-### `state.js`
+### `schema.js`
 
-Canonical application state. Must distinguish:
-
-- user-selected values
-- locked values
-- preferred values
-- free/randomizable values
-- generated seed selections
-
-Generated state must never silently overwrite locked state.
-
-### `random.js`
-
-Deterministic PRNG and weighted drawing only. It should not contain domain rules.
+Runtime fixture validation and stable enum definitions.
 
 Responsibilities:
 
-- seed hashing
-- deterministic PRNG
-- weighted selection
-- optional temperature transform
-- deterministic shuffle where needed
+- verify stable IDs;
+- validate `stageHints`, `anchorSuitability`, intensity ranges, role shapes;
+- validate requirement shape and OR `spec[]` values;
+- reject unsupported v0.1 role shapes;
+- reject broken references;
+- detect duplicate IDs and obvious self-contradictions.
 
-### `compatibility.js`
+### `rng.js`
 
-Domain validity and scoring.
+Pure deterministic random utilities only.
 
 Responsibilities:
 
-- character capability derivation
-- actor/receiver role assignment
-- hard requirement filtering
-- item compatibility evaluation
-- tag-based preference scoring
-- sparse explicit pair overrides
-- diversity penalties
-- final validation
+- hash a composite key;
+- deterministic PRNG;
+- weighted draw;
+- independent stream keys;
+- reroll-count derivation.
+
+No adult-domain rules belong here.
+
+### `providers.js`
+
+Pure affordance derivation.
+
+Input:
+
+- character anatomy;
+- character-owned equipment;
+- immutable Scene Config.
+
+Must not inspect gender, presentation, archetype, relationship labels, or personality.
+
+### `eligibility.js`
+
+Hard validity only.
+
+Responsibilities:
+
+- Permission state;
+- participant count;
+- role-shape support;
+- provider/requirement satisfaction by the correct owner;
+- per-character mobility requirements;
+- stage eligibility;
+- duplicate/non-repeatable item exclusion;
+- role-switch budget;
+- anchor reachability/preservation hooks.
+
+Every rejection returns structured `ruleId` instrumentation for Explain Panel use.
+
+### `binding.js`
+
+Scene-level relationship direction.
+
+Modes:
+
+- directed;
+- egalitarian.
+
+Directed role switch is persistent and limited to once per scene.
+
+Egalitarian directed-item direction should use seeded anti-monopoly memory rather than rigid ABAB alternation.
+
+### `anchor.js`
+
+Selects and validates the Main Anchor.
+
+Responsibilities:
+
+- anchor eligibility via `anchorSuitability`;
+- allowed `stageHints`;
+- user locks;
+- reachability under available pre-anchor stage budget;
+- future preservation under monotonic mobility.
+
+Candidate-pool collapse is diagnostic-only in v0.1.
+
+### `stage.js`
+
+Narrative-order generation loop.
+
+Generation order equals narrative order:
+
+```text
+choose anchor
+-> determine anchor stage
+-> generate pre-anchor stages in order
+-> emit anchor at its stage position
+-> generate post-anchor slots
+```
+
+Character State is applied immediately after each selected item.
+
+Main/Secondary/Accent are runtime importance labels. They do not determine ordering.
+
+### `score.js`
+
+Soft weighting only.
+
+v0.1 contributions:
+
+- intensity fit;
+- explicit user preference;
+- anchor affinity;
+- diversity penalty.
+
+Hard exclusions must never be encoded as zero scores.
+
+Scores should be additive contributions for Explain Panel readability. A weighted draw may convert total score to a positive weight internally.
+
+### `compiler-dumb.js`
+
+Early end-to-end compiler used before the full prompt system exists.
+
+It should interpolate `promptTemplate` placeholders and concatenate enough output to inspect whether fixture wording and role binding are coherent.
 
 ### `compiler.js`
 
-Orchestrates prompt modules and converts structured app state into a single coherent prompt.
+Later full compiler.
 
-It must not dump raw numeric latent parameters unless explicitly useful. Translate them into semantic writing instructions.
+It should output one coherent LLM prompt while keeping:
 
-### `ui.js`
+- play intensity;
+- lexical explicitness;
+- style;
+- character behavior;
+- story length;
 
-DOM rendering and event handling. Do not embed the content database in HTML.
+as separate axes.
 
-### `app.js`
+### `explain.js`
 
-Application bootstrap and module orchestration.
+Transforms instrumentation into human-readable diagnostics.
 
-## Data loading
+Must support reverse lookup:
 
-For GitHub Pages compatibility, JSON files can be loaded through `fetch()` when served over HTTP(S). Local `file://` operation is not a v1 requirement.
+> Why was item X excluded at this stage?
 
-## UI philosophy
+### `lint.html`
 
-Long single-page flow inspired by parameter-builder tools rather than a dashboard.
+Developer-facing static page that loads fixtures and reports schema/data errors and warnings.
 
-Recommended sections:
+Warnings should include vocabulary/cluster growth and deprecated/broken references. Avoid arbitrary hard taxonomy caps unless an actual integrity condition is violated.
 
-1. Play intensity
-2. Core play selection
-3. Adult-content parameters
-4. Writing style
-5. Plot seed
-6. Characters
-7. Relationship / scene
-8. Story mode
-9. Seed / variation
-10. Prompt preview
+### `coverage.html`
 
-Advanced areas should be collapsible.
+Runs canonical two-character configurations to report:
 
-## Prompt preview
+- eligible count;
+- anchor-eligible count;
+- cluster coverage;
+- dead items;
+- mobility-state utilization.
 
-Normal UI changes should update preview in real time. Randomized generated choices should only change when the relevant reroll action is triggered.
-
-Recommended controls:
-
-- reroll all free fields
-- reroll plays
-- reroll characters
-- reroll context
-- reroll story
-- reroll style variation
-- copy prompt
-
-## Compatibility engine rule
-
-Do not implement random selection as independent dimensions.
-
-Correct order:
+## Generation pipeline
 
 ```text
-user state
--> hard filtering
--> role assignment
--> candidate scoring
--> deterministic weighted draw
--> re-score remaining candidates
--> draw next slot
--> validation
--> compiled prompt
+User State / Locks
+        ↓
+Character Facts + Character Equipment + Scene Config
+        ↓
+deriveProviders()
+        ↓
+Permission Filter
+        ↓
+Choose Scene Binding
+        ↓
+Choose Main Anchor + Anchor Reachability
+        ↓
+Initialize Character State
+        ↓
+Generate Stage 1 → 2 → 3 in narrative order
+        ↓
+For each slot:
+  hard eligibility
+  anchor preservation/reachability
+  soft score
+  diversity
+  seeded weighted draw
+  apply per-character mobility effects
+        ↓
+Final assertions
+        ↓
+Prompt compiler
 ```
 
-## Character anatomy defaults
+## Intensity rule
 
-The UI may derive default anatomy from a selected baseline profile, but anatomy is an independent structure and must remain editable for custom/fantasy/trans configurations.
+User intensity is the maximum allowed play intensity, not an exact-match filter.
 
-Never infer play validity solely from labels such as male/female, BL/GL/MF, tomboy, or femboy.
+An item is hard eligible if `item.intensityMin <= userMaxIntensity`.
 
-## Avoiding data duplication
+Actual expression range is capped by the user's maximum. Lighter items remain available as setup/accent in heavier scenes.
 
-A canonical item has one ID. If it belongs conceptually to several UI groups, expose it through tags/aliases rather than duplicating data records.
+Lexical explicitness is independent from play intensity.
 
-Example: blindfold may be visible under both sensory and restraint filters while remaining one canonical item.
+## Character State rule
 
-## V1 implementation sequence
+v0.1 only tracks per-character mobility:
 
-1. Static layout and state model
-2. Data loader and schema fixtures
-3. Two-character profile editor with anatomy capability model
-4. Adult item browser with category/search/status
-5. Manual main/secondary/accent selection
-6. Hard compatibility filtering
-7. Deterministic weighted seed engine
-8. Style/story/context modules
-9. Prompt compiler
-10. Validation/debug panel
-11. GitHub Pages polish
+```text
+free > partial > restricted > immobilized
+```
 
-## Debugging requirement
+Mobility is monotonic/non-reversible in v0.1. Do not add a generic state framework until a second real dynamic state is proven necessary.
 
-During development, provide an optional debug panel that explains why an item is:
+## Main Anchor rule
 
-- eligible
-- down-weighted
-- excluded
+The Main Anchor is selected before stage filling.
 
-This is important because a compatibility-driven generator becomes difficult to tune if selection decisions are opaque.
+An anchor must be reachable from initial Character State within the available pre-anchor slot budget. A preceding candidate that makes the anchor impossible under the monotonic model must be excluded.
+
+If a selected candidate causes future pools to collapse severely, Explain Panel should warn. Pool-size thresholds are not hard constraints in v0.1.
+
+## Fixture strategy
+
+Do not fill the database evenly by taxonomy first. Stress the schema.
+
+Initial fixture mix should cover:
+
+- zero-requirement directed items;
+- mutual items;
+- anatomy-specific requirements;
+- generic provider alternatives;
+- equipment-dependent items;
+- scene-provider requirements;
+- mobility setters;
+- mobility requirements;
+- role switches;
+- participant-count exclusions;
+- dense same-cluster candidates;
+- wide/narrow intensity ranges.
+
+Only expand toward full taxonomy after these paths behave correctly.
+
+## Test strategy
+
+Unit-test objectively verifiable modules:
+
+- `rng.js` determinism and stream independence;
+- `providers.js` table-driven affordance derivation;
+- `eligibility.js` pass/fail plus rejection `ruleId`;
+- mobility comparisons/effects by character owner;
+- anchor reachability.
+
+Manual/Explain testing is appropriate for:
+
+- score coefficient taste;
+- cluster quality;
+- compiler prose quality;
+- egalitarian anti-monopoly constants;
+- UI polish.
+
+## Deferred
+
+- reversible restraints;
+- 3+ participant automatic generation;
+- planner/search algorithms;
+- generic state DSL;
+- embedding similarity;
+- full pair matrix;
+- multiple randomness modes;
+- clothing hard state until fixtures prove it useful;
+- API/backend integration.
