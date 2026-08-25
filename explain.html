@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Explain Panel — Adult Story Prompt Builder</title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:1200px;margin:0 auto;padding:28px;background:#111;color:#eee;line-height:1.5}
+    section{margin:20px 0;padding:18px;border:1px solid #444;border-radius:10px;background:#181818} input,select,button{font:inherit;padding:8px;margin:4px;background:#222;color:#eee;border:1px solid #555;border-radius:6px} pre{white-space:pre-wrap;background:#0b0b0b;padding:14px;border-radius:8px;overflow:auto}.muted{color:#bbb}
+  </style>
+</head>
+<body>
+  <h1>Explain Panel</h1>
+  <p class="muted">Developer-facing diagnostics for one deterministic generation.</p>
+  <section>
+    <label>Seed <input id="seed" value="explain-001"></label>
+    <label>Binding <select id="binding"><option value="directed">directed</option><option value="egalitarian">egalitarian</option></select></label>
+    <label>Intensity <select id="intensity"><option>1</option><option>2</option><option selected>3</option></select></label>
+    <button id="run">Run</button>
+    <p><a href="index.html">Demo</a> · <a href="test.html">Regression</a> · <a href="coverage.html">Coverage</a></p>
+  </section>
+  <section><h2>Slot funnel</h2><pre id="summary"></pre></section>
+  <section>
+    <h2>Reverse query</h2>
+    <label>Item ID <input id="item-id" value="requires_restricted_receiver"></label>
+    <button id="query">Why?</button>
+    <pre id="reverse"></pre>
+  </section>
+  <script type="module" src="./js/explain-page.js"></script>
+</body>
+</html>
