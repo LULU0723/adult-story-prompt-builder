@@ -8,21 +8,32 @@ This file records major project milestones and user-visible development changes.
 
 - Automated Quality Gate foundation combining the existing regression suite and Coverage Lint into hard-failure and warning rules.
 - `quality.html` developer page for running the gate locally.
+- `js/compiler-v01.js` as the first real story prompt compiler, replacing the legacy line-by-line summary in the demo path.
+- `compiler-test.html` and `js/compiler-test.js` for compiler-only smoke checks.
 
 ### Changed
 
-- Project README updated for the 29-item fixture checkpoint and Quality Gate workflow.
+- The demo app now compiles generated stages into one coherent story-writing prompt instead of using `compiler-dumb.js`.
+- Story-level compiler controls are separated into length, opening, pace, writing style, lexical directness, adult-content share, and description focus.
+- Main Anchor text is rendered once and only referenced by stage position afterward to avoid accidental duplicate execution.
+- Project README updated for the 29-item fixture checkpoint, Quality Gate workflow, and v0.1 compiler foundation.
 - Coverage `mobilityRunRatio` uses `anchorsFound` as its denominator so future no-anchor canonical runs cannot dilute the metric.
 - Coverage metric notes distinguish candidate-pool health from duplicate rejections and warn against comparing raw selection counts across different canonical config sets.
 
 ### Planned
 
-- Measure Coverage metric stability across multiple seed prefixes before freezing baseline-relative regression thresholds.
-- Add baseline-relative pool regression rules only after stochastic variance is quantified.
+- Build the first product-facing form UI on top of the compiler settings without coupling narrative controls to physical eligibility.
+- Complete the Draft Coverage baseline PR when the exact 29-item snapshot can be captured and externally reviewed.
 - Keep future fixture expansion balanced across stages; Stage 1 is now the narrowest stage but remains healthy in absolute terms.
 - Give Light mobility state a real structural effect; the current `light_position_hold` changes mobility to `partial`, but no existing fixture is gated by that transition.
 
 ## Project milestones
+
+### PR #9 — Quality Gate foundation
+
+- Added a thin automated gate over the existing regression suite and Coverage Lint.
+- Added fail-closed contract validation so malformed diagnostics cannot silently pass as healthy.
+- Added warnings for narrow stage pools, S3/S1 imbalance, mobility without preservation effect, singleton clusters, and low mobility-item ratio.
 
 ### PR #8 — Fixture expansion batch 2
 
