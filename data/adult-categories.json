@@ -1,0 +1,16 @@
+[
+  {"id":"basic_intimacy","label":"基礎親密／性愛行為","order":1},
+  {"id":"dominance_submission","label":"支配／服從","order":2},
+  {"id":"restraint","label":"束縛／行動限制","order":3},
+  {"id":"sensory","label":"感官玩法","order":4},
+  {"id":"pace_control","label":"節奏／高潮控制","order":5},
+  {"id":"shame_display","label":"羞恥／展示","order":6},
+  {"id":"discovery_risk","label":"公開感／被發現風險","order":7},
+  {"id":"power_identity","label":"權力差／身份玩法","order":8},
+  {"id":"character_contrast","label":"角色反差","order":9},
+  {"id":"fetish_body","label":"Fetish／身體偏好","order":10},
+  {"id":"clothing","label":"服裝／換裝","order":11},
+  {"id":"environment","label":"道具／環境互動","order":12},
+  {"id":"bdsm_strong","label":"BDSM／強刺激","order":13},
+  {"id":"multi_participant","label":"多人／觀看／參與結構","order":14,"autoRandomEnabled":false}
+]
