@@ -10,24 +10,34 @@ This file records major project milestones and user-visible development changes.
 - `quality.html` developer page for running the gate locally.
 - `js/compiler-v01.js` as the first real story prompt compiler, replacing the legacy line-by-line summary in the demo path.
 - `compiler-test.html` and `js/compiler-test.js` for compiler-only smoke checks.
+- First product-facing form UI in `index.html` for two characters, binding, scene, play intensity, seed, story controls, compiled prompt preview, copy, and secondary debug output.
 
 ### Changed
 
-- The demo app now compiles generated stages into one coherent story-writing prompt instead of using `compiler-dumb.js`.
+- The main app now reads character, anatomy, equipment, scene, binding, and story settings from the UI for every generation instead of using fixed demo constants.
+- Narrative gender/presentation remain descriptive only; anatomy and equipment are explicitly selected and continue to drive provider derivation and eligibility.
+- Directed and egalitarian bindings are selectable from the product UI.
+- Character freeform notes now flow into the v0.1 compiler as narrative notes.
+- The demo app compiles generated stages into one coherent story-writing prompt instead of using `compiler-dumb.js`.
 - Story-level compiler controls are separated into length, opening, pace, writing style, lexical directness, adult-content share, and description focus.
 - Main Anchor text is rendered once and only referenced by stage position afterward to avoid accidental duplicate execution.
-- Project README updated for the 29-item fixture checkpoint, Quality Gate workflow, and v0.1 compiler foundation.
 - Coverage `mobilityRunRatio` uses `anchorsFound` as its denominator so future no-anchor canonical runs cannot dilute the metric.
 - Coverage metric notes distinguish candidate-pool health from duplicate rejections and warn against comparing raw selection counts across different canonical config sets.
 
 ### Planned
 
-- Build the first product-facing form UI on top of the compiler settings without coupling narrative controls to physical eligibility.
+- Browser-smoke the first product UI across directed/egalitarian, anatomy/equipment, privacy, and story-control combinations before merging its PR.
 - Complete the Draft Coverage baseline PR when the exact 29-item snapshot can be captured and externally reviewed.
 - Keep future fixture expansion balanced across stages; Stage 1 is now the narrowest stage but remains healthy in absolute terms.
 - Give Light mobility state a real structural effect; the current `light_position_hold` changes mobility to `partial`, but no existing fixture is gated by that transition.
 
 ## Project milestones
+
+### PR #11 — Prompt compiler v0.1 foundation
+
+- Added the first real compiler that converts generation output into one coherent downstream story prompt.
+- Separated length, opening, pace, writing style, lexical directness, adult-content share, and description focus.
+- Added compiler smoke checks and removed Main Anchor text duplication.
 
 ### PR #9 — Quality Gate foundation
 

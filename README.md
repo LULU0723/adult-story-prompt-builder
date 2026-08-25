@@ -20,11 +20,12 @@ Current milestones include:
 - Coverage Lint with canonical configuration matrices and per-stage candidate-pool metrics
 - a 29-item fixture checkpoint with substantially improved Stage 3 and Light coverage
 - an automated Quality Gate foundation that combines regression and coverage health checks
-- a v0.1 prompt compiler foundation that turns generated stages into one coherent story-writing prompt
+- a v0.1 prompt compiler that turns generated stages into one coherent story-writing prompt
+- a first product-facing form UI for two characters, scene/binding controls, story controls, prompt preview, copy, and secondary debug output
 
-The v0.1 compiler now separates story length, opening style, pacing, writing style, lexical directness, adult-content share, and description focus. It also carries character physical constraints, scene constraints, Main Anchor priority, stage progression, and role-direction consistency into the final prompt.
+The product UI keeps narrative gender/presentation separate from physical eligibility. Anatomy and equipment are selected explicitly and are the fields that feed provider derivation and eligibility.
 
-The final end-user UI is still pending. The current `index.html` remains a developer-oriented demo and debug surface; the next product-facing milestone is a form-based UI that edits compiler/story settings without changing eligibility semantics.
+PR #10 baseline work remains separate and Draft. The current product-facing work does not depend on the unfinished baseline snapshot.
 
 ## Product principles
 
@@ -36,14 +37,14 @@ The final end-user UI is still pending. The current `index.html` remains a devel
 - Main Anchor reachability is preserved across earlier selections.
 - Seeded generation must remain deterministic and independent of fixture JSON order.
 - User locks and explicit permission states override automatic recommendation.
-- Internal modules remain separate even though the final product is intended to compile one coherent prompt.
+- Internal modules remain separate even though the final product compiles one coherent prompt.
 
 ## Repository layout
 
 - `data/adult-items.json` — structured fixture/content data.
-- `js/app.js` — browser-facing demo wiring and schema hard-stop behavior.
+- `js/app.js` — product form wiring, schema hard-stop behavior, generation, copy, and prompt preview.
 - `js/compiler-v01.js` — current v0.1 story prompt compiler.
-- `js/compiler-dumb.js` — retained legacy minimal compiler for historical comparison; not used by the current demo path.
+- `js/compiler-dumb.js` — retained legacy minimal compiler for historical comparison; not used by the current product path.
 - `js/compiler-test.js` — prompt compiler smoke checks.
 - `js/providers.js` — derives anatomy, equipment, and scene providers.
 - `js/eligibility.js` — hard permission, stage, provider, mobility, and binding checks.
@@ -58,11 +59,28 @@ The final end-user UI is still pending. The current `index.html` remains a devel
 - `js/quality-gate.js` — orchestrates existing regression and coverage results into hard failures and warnings.
 - `docs/` — data-model, architecture, review, and checkpoint notes.
 
+## Product UI
+
+`index.html` is now the first end-user-oriented surface rather than a raw engine demo.
+
+Current editable inputs:
+
+- Character A/B names
+- narrative gender, presentation, archetype, role preference, and freeform note
+- explicit anatomy and equipment per character
+- directed A→B or egalitarian binding
+- maximum play intensity
+- seed
+- scene privacy, location, and props
+- story length, opening, pace, writing style, lexical directness, adult-content share, and description focus
+
+The output column shows the compiled prompt first. Raw generation details and dataset validation are secondary collapsible sections.
+
 ## Diagnostic and entry pages
 
-The repository contains seven useful entry points:
+Useful entry points:
 
-- `index.html` — project demo and compiled prompt preview.
+- `index.html` — product form and compiled prompt preview.
 - `compiler-test.html` — compiler-only smoke test and sample prompt output.
 - `test.html` — regression suite.
 - `explain.html` — generation explanation and reverse-query diagnostics.
@@ -78,7 +96,7 @@ For example, from the repository root:
 python -m http.server 8000
 ```
 
-Then open `http://localhost:8000/` and navigate to the diagnostic pages as needed. Any equivalent static web server is fine.
+Then open `http://localhost:8000/`.
 
 ## Prompt compiler
 
@@ -127,6 +145,6 @@ Before merging meaningful engine or data changes:
 5. use Explain diagnostics when a candidate is unexpectedly excluded or not selected;
 6. for engine changes, verify deterministic behavior and JSON-order invariance.
 
-For compiler changes, also run `compiler-test.html` and inspect at least one compiled prompt for duplicate anchors, unresolved placeholders, and incorrect role direction.
+For compiler/UI changes, also run `compiler-test.html`, generate at least one directed and one egalitarian example from `index.html`, verify explicit anatomy/equipment mapping, and inspect the final prompt for unresolved placeholders or role-direction errors.
 
 See `CHANGELOG.md` for milestone history and `docs/` for detailed architecture decisions and empirical review notes.
