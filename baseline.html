@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Coverage Baseline Capture — Adult Story Prompt Builder</title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:1100px;margin:0 auto;padding:32px;line-height:1.5;background:#111;color:#eee}
+    h1,h2{line-height:1.2} section{margin:24px 0;padding:20px;border:1px solid #444;border-radius:12px;background:#181818}
+    button{font:inherit;padding:8px 12px;background:#222;color:#eee;border:1px solid #555;border-radius:6px;cursor:pointer}
+    pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0c0c0c;padding:16px;border-radius:8px;max-height:720px;overflow:auto}
+    .note{color:#bbb}
+  </style>
+</head>
+<body>
+  <h1>Coverage Baseline Capture</h1>
+  <p class="note">Exports the current deterministic 2/3/2 Coverage snapshot for review. The 1/1/1 configs are intentionally excluded because their stage-pool sampling was not stable enough at 100 runs/config.</p>
+
+  <section>
+    <h2>Baseline policy</h2>
+    <p>Tracked numeric metrics: <code>eligibleItems</code>, <code>avgEligiblePool</code>, and <code>avgEligiblePoolByStage</code>. Pool regression tolerance is 15%.</p>
+    <p>Mobility and preservation are captured only as observed/not-observed booleans; their raw counts and ratios are not baseline thresholds.</p>
+    <p>The committed baseline file is currently a placeholder until this exact snapshot is externally reviewed.</p>
+    <button id="capture-baseline">Capture current 2/3/2 baseline</button>
+    <p><a href="quality.html">Quality Gate</a> · <a href="coverage.html">Coverage Lint</a> · <a href="index.html">Back to demo</a></p>
+  </section>
+
+  <section><h2>Snapshot JSON</h2><pre id="baseline-output">Not captured yet.</pre></section>
+
+  <script type="module" src="./js/quality-gate-baseline.js"></script>
+</body>
+</html>

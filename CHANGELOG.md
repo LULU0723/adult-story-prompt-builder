@@ -8,21 +8,33 @@ This file records major project milestones and user-visible development changes.
 
 - Automated Quality Gate foundation combining the existing regression suite and Coverage Lint into hard-failure and warning rules.
 - `quality.html` developer page for running the gate locally.
+- Coverage Baseline capture/comparison helpers for stable 2/3/2 canonical configurations.
+- `data/COVERAGE_BASELINE.json` manifest with schema/data metadata and 15% pool-regression tolerance.
+- `docs/COVERAGE_BASELINE.md` documenting baseline scope, refresh policy, and intentionally excluded metrics.
 
 ### Changed
 
-- Project README updated for the 29-item fixture checkpoint and Quality Gate workflow.
+- Project README updated for the 29-item fixture checkpoint, Quality Gate workflow, and cross-version baseline policy.
 - Coverage `mobilityRunRatio` uses `anchorsFound` as its denominator so future no-anchor canonical runs cannot dilute the metric.
 - Coverage metric notes distinguish candidate-pool health from duplicate rejections and warn against comparing raw selection counts across different canonical config sets.
+- Quality Gate baseline comparison treats fixture-count and `dataVersion` changes as warnings, pool regressions over 15% as hard failures, and mobility/preservation only as observed/not-observed signals.
 
 ### Planned
 
-- Measure Coverage metric stability across multiple seed prefixes before freezing baseline-relative regression thresholds.
-- Add baseline-relative pool regression rules only after stochastic variance is quantified.
+- Populate the initial 29-item `COVERAGE_BASELINE.json` with exact canonical capture output and smoke-verify it before merging the baseline PR.
 - Keep future fixture expansion balanced across stages; Stage 1 is now the narrowest stage but remains healthy in absolute terms.
 - Give Light mobility state a real structural effect; the current `light_position_hold` changes mobility to `partial`, but no existing fixture is gated by that transition.
+- Consider anchor HHI baselines only after separate stability measurement.
 
 ## Project milestones
+
+### PR #9 — Quality Gate foundation
+
+- Added a thin orchestration layer over the existing regression suite and Coverage Lint.
+- Added fail-closed diagnostic-contract validation so malformed coverage/test output cannot silently pass.
+- Added hard failures for regression/schema/dead/never-selected/no-anchor/empty-rate failures.
+- Added warnings for narrow stage pools, S3/S1 collapse, singleton clusters, low mobility-changing fixture ratio, and mobility changes without preservation effects.
+- Seed-prefix review established that 100 runs is stable enough for 2/3/2 pool metrics, while 1/1/1 Stage 2 and rare-event counts should not receive numeric baselines.
 
 ### PR #8 — Fixture expansion batch 2
 
