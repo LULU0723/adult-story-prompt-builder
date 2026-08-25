@@ -13,6 +13,7 @@ function withToy(character){character.equipment=['strap_on'];return character;}
 
 const S111={1:1,2:1,3:1};
 const S232={1:2,2:3,3:2};
+const RUNS_PER_CONFIG=100;
 
 const CONFIGS = [
   {name:'directed-ff-111-i3',binding:'directed',chars:[female('a'),female('b')],intensity:3,privacy:'private',slots:S111},
@@ -30,11 +31,14 @@ const CONFIGS = [
   {name:'directed-mm-232',binding:'directed',chars:[male('a'),male('b')],intensity:3,privacy:'private',slots:S232},
   {name:'egal-mm-232',binding:'egalitarian',chars:[male('a'),male('b')],intensity:3,privacy:'private',slots:S232},
   {name:'directed-ff-public-232',binding:'directed',chars:[female('a'),female('b')],intensity:3,privacy:'public',slots:S232},
-  {name:'egal-ff-public-232',binding:'egalitarian',chars:[female('a'),female('b')],intensity:3,privacy:'public',slots:S232}
+  {name:'egal-ff-public-232',binding:'egalitarian',chars:[female('a'),female('b')],intensity:3,privacy:'public',slots:S232},
+  {name:'directed-ff-semi-232',binding:'directed',chars:[female('a'),female('b')],intensity:3,privacy:'semi',slots:S232},
+  {name:'egal-ff-semi-232',binding:'egalitarian',chars:[female('a'),female('b')],intensity:3,privacy:'semi',slots:S232}
 ];
 
 function buildContext(config, seed){
-  const sceneConfig={location:config.privacy==='public'?'public_space':'bedroom',privacy:config.privacy,props:['mirror']};
+  const location=config.privacy==='private'?'bedroom':config.privacy==='semi'?'semi_private_space':'public_space';
+  const sceneConfig={location,privacy:config.privacy,props:['mirror']};
   const binding=config.binding==='egalitarian'?makeEgalitarianBinding(config.chars.map(c=>c.id)):makeDirectedBinding(config.chars[0].id,config.chars[1].id);
   const slotsByStage=config.slots;
   return {
@@ -56,7 +60,6 @@ export function runCoverage(){
   const observedEligibleCounts=new Map(items.map(i=>[i.id,0]));
   const globallyReachable=new Set();
   const byConfig={};
-  let mobilityChangedRuns=0;
   let totalRuns=0;
 
   for(const config of CONFIGS){
@@ -66,8 +69,11 @@ export function runCoverage(){
     let preservationRejects=0;
     let duplicateRejects=0;
     let anchorsFound=0;
+    let mobilityChangedRuns=0;
+    let eligiblePoolTotal=0;
+    const stagePool={1:{total:0,slots:0},2:{total:0,slots:0},3:{total:0,slots:0}};
 
-    for(let i=0;i<100;i++){
+    for(let i=0;i<RUNS_PER_CONFIG;i++){
       totalRuns++;
       const {ctx,slotsByStage}=buildContext(config,`${config.name}-${i}`);
       const anchorResult=chooseAnchor(items,ctx);
@@ -88,6 +94,10 @@ export function runCoverage(){
         if(step.kind!=='main'&&step.kind!=='anchor-error'){
           drawableSlots++;
           if(step.kind==='empty')emptySlots++;
+          const pool=step.diagnostics?.eligiblePool??step.candidates?.length??0;
+          eligiblePoolTotal+=pool;
+          stagePool[step.stage].total+=pool;
+          stagePool[step.stage].slots++;
         }
         if(step.item){
           selectedCounts.set(step.item.id,(selectedCounts.get(step.item.id)??0)+1);
@@ -120,12 +130,17 @@ export function runCoverage(){
       intensity:config.intensity,
       privacy:config.privacy,
       slotsByStage:config.slots,
+      runs:RUNS_PER_CONFIG,
       eligibleItems:eligibleSeen.size,
       anchorsFound,
       emptySlots,
       drawableSlots,
       emptyRate,
       emptyLevel:emptyRate>0.15?'warning':'ok',
+      avgEligiblePool:drawableSlots?eligiblePoolTotal/drawableSlots:0,
+      avgEligiblePoolByStage:Object.fromEntries(Object.entries(stagePool).map(([stage,value])=>[stage,value.slots?value.total/value.slots:0])),
+      mobilityChangedRuns,
+      mobilityRunRatio:RUNS_PER_CONFIG?mobilityChangedRuns/RUNS_PER_CONFIG:0,
       nonRepeatableRejections:duplicateRejects,
       preservationRejections:preservationRejects
     };
@@ -141,15 +156,15 @@ export function runCoverage(){
     totals:{
       items:items.length,
       configs:CONFIGS.length,
+      runsPerConfig:RUNS_PER_CONFIG,
       generatedRuns:totalRuns,
       mobilityChangingItems:mobilityItemCount,
-      mobilityChangingItemRatio:items.length?mobilityItemCount/items.length:0,
-      runsWithMobilityChange:mobilityChangedRuns,
-      mobilityRunRatio:totalRuns?mobilityChangedRuns/totalRuns:0
+      mobilityChangingItemRatio:items.length?mobilityItemCount/items.length:0
     },
     metricNotes:{
       deadItems:'Never observed as an anchor candidate, normal draw candidate, or selected item in any canonical run.',
-      mobility:'With small fixture counts these are baseline metrics only. Reassess mobility only if changing-item ratio <10%, run ratio <20%, and preservation rejections are approximately zero.'
+      avgEligiblePool:'Mean normal-slot candidate count after hard eligibility and anchor preservation. Read per-stage values to detect stage-specific pool collapse.',
+      mobility:'Compare mobilityRunRatio only between configs with the same slotsByStage. Reassess mobility only if changing-item ratio <10%, fixed-slot run ratio <20%, and preservation rejections are approximately zero.'
     },
     deadItems,
     neverSelected,
