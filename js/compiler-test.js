@@ -56,6 +56,18 @@ export function runCompilerSmokeTests() {
   assert(fullRestraintPrompt.includes('幾乎無法自行改變姿勢'), 'full-restraint narrativeDirection missing', failures);
   assert(!fullRestraintPrompt.includes('OLD_FULL'), 'full-restraint legacy promptTemplate leaked', failures);
 
+  const penetrativeGeneration = { results: [
+    { stage:1, kind:'accent', direction:{actorId:'A',receiverId:'B'}, item:{id:'manual_penetrative_contact',label:'OLD_MANUAL_LABEL',promptTemplate:'{actor} generic manual penetrator receptacle {receiver}。'} },
+    { stage:2, kind:'secondary', direction:{actorId:'A',receiverId:'B'}, item:{id:'toy_penetrative_contact',label:'OLD_TOY_LABEL',promptTemplate:'{actor} owner provider toy receptacle {receiver}。'} },
+    { stage:3, kind:'main', direction:{actorId:'A',receiverId:'B'}, item:{id:'penis_penetrative_contact',label:'OLD_PENIS_LABEL',promptTemplate:'{actor} penis penetrator provider receptacle {receiver}。'} }
+  ] };
+  const penetrativePrompt = compileStoryPrompt({generation:penetrativeGeneration,characters});
+  assert(penetrativePrompt.includes('手部插入互動') && penetrativePrompt.includes('手指與手部動作'), 'manual penetrative narrative copy missing', failures);
+  assert(penetrativePrompt.includes('道具插入互動') && penetrativePrompt.includes('自己持有的插入型或穿戴式道具'), 'toy penetrative narrative copy missing', failures);
+  assert(penetrativePrompt.includes('本篇核心：陰莖插入互動（第 3 階段）') && penetrativePrompt.includes('以陰莖插入為核心的親密互動'), 'penis penetrative narrative copy missing', failures);
+  assert(!penetrativePrompt.includes('OLD_MANUAL_LABEL') && !penetrativePrompt.includes('OLD_TOY_LABEL') && !penetrativePrompt.includes('OLD_PENIS_LABEL'), 'legacy penetrative labels leaked', failures);
+  assert(!penetrativePrompt.includes('generic manual penetrator') && !penetrativePrompt.includes('owner provider') && !penetrativePrompt.includes('receptacle'), 'engine/spec penetrative wording leaked into compiled prompt', failures);
+
   const noAnchor = compileStoryPrompt({generation:{results:[]},characters});
   assert(noAnchor.includes('沒有可用的主軸事件；不要自行捏造新的核心玩法。'), 'missing-anchor guard text missing', failures);
 
