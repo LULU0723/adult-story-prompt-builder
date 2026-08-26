@@ -14,6 +14,10 @@ const PRIVACY_DEFAULT_LOCATIONS = Object.freeze({
   semi: 'semi_private_space',
   public: 'public_space'
 });
+const SCENE_PROP_ALIASES = Object.freeze({
+  mirror: 'mirror',
+  '鏡子': 'mirror'
+});
 
 function checkedValues(containerId) {
   return [...document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`)].map(input => input.value);
@@ -21,6 +25,10 @@ function checkedValues(containerId) {
 
 function csvValues(value) {
   return String(value ?? '').split(',').map(part => part.trim()).filter(Boolean);
+}
+
+function scenePropValues(value) {
+  return csvValues(value).map(part => SCENE_PROP_ALIASES[part.toLowerCase()] || SCENE_PROP_ALIASES[part] || part);
 }
 
 function readCharacter(prefix, fallbackName) {
@@ -44,7 +52,7 @@ export function readProductForm() {
   const sceneConfig = {
     location: $('location').value.trim() || PRIVACY_DEFAULT_LOCATIONS[privacy],
     privacy,
-    props: csvValues($('props').value)
+    props: scenePropValues($('props').value)
   };
   const storyConfig = {
     length: $('length').value,
