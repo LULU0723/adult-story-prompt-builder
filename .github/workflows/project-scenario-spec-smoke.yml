@@ -1,0 +1,60 @@
+name: Project Scenario Spec Verification
+
+on:
+  push:
+    branches:
+      - feat/project-scenario-spec-v1
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run compiler smoke and measure prompt reduction
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          globalThis.document = { querySelector: () => null };
+          const { runCompilerSmokeTests } = await import('./js/compiler-test.js');
+          const result = runCompilerSmokeTests();
+          if (!result.passed) throw new Error(JSON.stringify(result.failures));
+          const standalone = result.samplePrompt.length;
+          const project = result.sampleProjectPrompt.length;
+          const reduction = 1 - (project / standalone);
+          console.log(JSON.stringify({compiler:'pass',standalone,project,reduction:Number(reduction.toFixed(3))}));
+          if (reduction < 0.25) throw new Error(`Project Prompt reduction too small: ${reduction}`);
+          NODE
+      - name: Verify Standalone output parity with main
+        shell: bash
+        run: |
+          git worktree add /tmp/main-tree origin/main
+          node --input-type=module <<'NODE'
+          import { pathToFileURL } from 'node:url';
+          import path from 'node:path';
+          globalThis.document = { querySelector: () => null };
+          async function compile(root) {
+            const mod = await import(pathToFileURL(path.join(root,'js/compiler-v01.js')).href);
+            const characters=[
+              {id:'A',displayName:'甲',adult:true,gender:'female',presentation:'androgynous',anatomy:['vagina','mouth','hands'],equipment:[]},
+              {id:'B',displayName:'乙',adult:true,gender:'female',presentation:'feminine',anatomy:['vagina','mouth','hands'],equipment:[]}
+            ];
+            const generation={results:[
+              {stage:1,kind:'accent',direction:{actorId:'A',receiverId:'B'},item:{id:'intro',label:'起始互動',promptTemplate:'{actor} 先靠近 {receiver}。'}},
+              {stage:2,kind:'secondary',forcedItemId:'enabler',direction:{actorId:'A',receiverId:'B'},item:{id:'enabler',label:'必要鋪墊',promptTemplate:'{actor} 先調整 {receiver} 的位置。'}},
+              {stage:3,kind:'main',direction:{actorId:'A',receiverId:'B'},item:{id:'anchor',label:'主軸事件',promptTemplate:'{actor} 將主軸事件落在 {receiver} 身上。'}}
+            ]};
+            return mod.compileStoryPrompt({generation,characters,sceneConfig:{location:'bedroom',privacy:'private',props:['mirror']}});
+          }
+          const branch = await compile(process.cwd());
+          const main = await compile('/tmp/main-tree');
+          console.log(`standalone parity: ${branch === main}`);
+          if (branch !== main) throw new Error('Standalone Prompt changed');
+          NODE
