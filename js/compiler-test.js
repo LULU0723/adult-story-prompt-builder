@@ -40,16 +40,23 @@ export function runCompilerSmokeTests() {
   assert(projectPrompt.startsWith('【本次故事規格】'), 'Project Prompt header missing', failures);
   assert(projectPrompt.includes('規格版本：v1'), 'Project Prompt version marker missing', failures);
   assert(projectPrompt.includes('所有角色皆為成年人。'), 'Project Prompt adult declaration missing', failures);
-  assert(projectPrompt.includes('【角色設定】') && projectPrompt.includes('【場景】') && projectPrompt.includes('【敘事控制】') && projectPrompt.includes('【主軸】') && projectPrompt.includes('【互動節點】'), 'Project Prompt dynamic sections missing', failures);
+  assert(projectPrompt.includes('【角色】') && projectPrompt.includes('【場景】') && projectPrompt.includes('【敘事】') && projectPrompt.includes('【Main Play】') && projectPrompt.includes('【階段】'), 'Project Prompt compact dynamic sections missing', failures);
   assert(projectPrompt.includes('甲 先靠近 乙。') && projectPrompt.includes('甲 將主軸事件落在 乙 身上。'), 'Project Prompt lost generated beats', failures);
-  assert(projectPrompt.includes('不得由身體設定、攜帶道具或外在呈現反推性別'), 'Project Prompt must keep per-run gender guard', failures);
-  assert(!projectPrompt.includes('【任務】') && !projectPrompt.includes('【輸出方式】'), 'Project Prompt should omit fixed standalone sections', failures);
-  assert(projectPrompt.length < prompt.length, 'Project Prompt should be shorter than Standalone Prompt', failures);
+  assert(projectPrompt.includes('性別設定：女性') && projectPrompt.includes('身體設定：陰道、口部、雙手'), 'Project Prompt lost per-story character facts', failures);
+  assert(projectPrompt.includes('- 篇幅：短篇｜700–1300 字') && projectPrompt.includes('- 節奏：快速升溫') && projectPrompt.includes('- 文風：角色驅動'), 'Project Prompt compact narrative controls missing', failures);
+  assert(projectPrompt.includes('- 主軸：主軸事件') && projectPrompt.includes('- 方向：甲 → 乙') && projectPrompt.includes('- 核心階段：3'), 'Project Prompt Main Play facts missing', failures);
+  assert(projectPrompt.includes('必要鋪墊：甲 先調整 乙 的位置。'), 'Project Prompt lost forced enabler marker', failures);
+  assert(!projectPrompt.includes('不得由身體設定、攜帶道具或外在呈現反推性別'), 'Project Prompt should rely on Project instructions for fixed gender guard', failures);
+  assert(!projectPrompt.includes('保持角色身體設定、道具所有權') && !projectPrompt.includes('以下內容是本次故事的動態設定') && !projectPrompt.includes('依專案固定規則直接開始正文'), 'Project Prompt still repeats fixed instructions', failures);
+  assert(!projectPrompt.includes('【任務】') && !projectPrompt.includes('【輸出方式】') && !projectPrompt.includes('【本次必要一致性】'), 'Project Prompt should omit fixed standalone sections', failures);
+  assert(projectPrompt.length < prompt.length * 0.75, `Project Prompt should be materially shorter than Standalone Prompt (${projectPrompt.length}/${prompt.length})`, failures);
   assert(PROJECT_INSTRUCTIONS_V01.includes('必要鋪墊必須先成立') && PROJECT_INSTRUCTIONS_V01.includes('活動能力已受限制') && PROJECT_INSTRUCTIONS_V01.includes('3 個簡短、彼此有明顯差異的後續發展方向'), 'Project fixed instructions contract incomplete', failures);
   assert(PROJECT_INSTRUCTIONS_V01.includes('目前支援的故事規格版本為 v1') && PROJECT_INSTRUCTIONS_V01.includes('規格版本'), 'Project fixed instructions version contract missing', failures);
 
   const custom = compileStoryPrompt({ generation, characters, sceneConfig:{privacy:'semi'}, storyConfig:{length:'ultra_short',pace:'slow_burn',lexicalDirectness:'direct',descriptionFocus:'dialogue',adultContentShare:'high'} });
   assert(custom.includes('極短篇') && custom.includes('約 500–900 個中文字') && custom.includes('慢熱') && custom.includes('直接明確的成人用語') && custom.includes('優先描寫對話') && custom.includes('成人互動是主要篇幅'), 'custom story controls not applied', failures);
+  const customProject = compileProjectPrompt({ generation, characters, sceneConfig:{privacy:'semi'}, storyConfig:{length:'ultra_short',pace:'slow_burn',lexicalDirectness:'direct',descriptionFocus:'dialogue',adultContentShare:'high'} });
+  assert(customProject.includes('極短篇｜500–900 字') && customProject.includes('節奏：慢熱') && customProject.includes('文字直接度：直接') && customProject.includes('成人內容比重：高') && customProject.includes('描寫重點：對話'), 'custom Project controls not compacted correctly', failures);
   const medium = compileStoryPrompt({ generation, characters, storyConfig:{length:'medium'} });
   assert(medium.includes('約 1000–1800 個中文字'), 'medium length calibration missing', failures);
 
