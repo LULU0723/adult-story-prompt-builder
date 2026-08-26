@@ -10,8 +10,8 @@ const DEFAULT_STORY_CONFIG = Object.freeze({
 
 const LENGTH_TEXT = Object.freeze({
   ultra_short: '極短篇。約 500–900 個中文字，只寫一個完整的互動段落或短場景。',
-  short: '短篇。約 800–1600 個中文字，集中完成當前情境，不拉長背景與收尾。',
-  medium: '中篇。約 1400–2600 個中文字，可有較完整的情緒與行動推進，但仍以當前情境為核心。'
+  short: '短篇。約 700–1300 個中文字，集中完成當前情境，不拉長背景與收尾。',
+  medium: '中篇。約 1000–1800 個中文字，可有較完整的情緒與行動推進，但仍以當前情境為核心。'
 });
 
 const OPENING_TEXT = Object.freeze({
