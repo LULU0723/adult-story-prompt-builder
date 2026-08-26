@@ -1,0 +1,84 @@
+name: Manual Main Play Verification
+
+on:
+  push:
+    branches:
+      - feat/manual-main-play-picker
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run schema, compiler, regression and manual-anchor checks
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          globalThis.document = { querySelector: () => null };
+          globalThis.fetch = async (path) => ({ json: async () => JSON.parse(fs.readFileSync(path, 'utf8')) });
+
+          const items = JSON.parse(fs.readFileSync('./data/adult-items.json', 'utf8'));
+          const { validateDataset, DATA_VERSION } = await import('./js/schema.js');
+          const validation = validateDataset(items);
+          if (validation.errors.length) throw new Error(`schema errors: ${JSON.stringify(validation.errors)}`);
+
+          const { runCompilerSmokeTests } = await import('./js/compiler-test.js');
+          const compiler = runCompilerSmokeTests();
+          if (!compiler.passed) throw new Error(`compiler smoke failed: ${JSON.stringify(compiler.failures)}`);
+
+          const { runRegressionSuite } = await import('./js/test-runner.js');
+          const regression = runRegressionSuite();
+          console.log('regression', JSON.stringify(regression.summary));
+          if (!regression.passed) throw new Error(`regression failed: ${JSON.stringify(regression.failures.slice(0,20))}`);
+
+          const { deriveProviders } = await import('./js/providers.js');
+          const { makeDirectedBinding, makeEgalitarianBinding } = await import('./js/binding.js');
+          const { chooseAnchor, enumerateAnchorCandidates } = await import('./js/anchor.js');
+          const { generateStages } = await import('./js/stage.js');
+
+          const chars = [
+            {id:'A',displayName:'A',adult:true,gender:'female',presentation:'feminine',anatomy:['vagina','breasts','anus','mouth','hands'],equipment:[]},
+            {id:'B',displayName:'B',adult:true,gender:'female',presentation:'feminine',anatomy:['vagina','breasts','anus','mouth','hands'],equipment:[]}
+          ];
+          function ctx(seed, binding) {
+            const scene={location:'bedroom',privacy:'private',props:['mirror']};
+            const slotsByStage={1:1,2:1,3:1};
+            return {
+              slotsByStage,
+              ctx:{dataVersion:DATA_VERSION,masterSeed:seed,userMaxIntensity:3,providers:deriveProviders(chars,scene),characterState:{A:{mobility:'free'},B:{mobility:'free'}},actorId:'A',receiverId:'B',participantCount:2,binding,minAnchorStage:2,maxAnchorStage:3,slotsByStage,selectedIds:new Set(),selectedItems:[],preferredTags:new Set(['control']),permissionByItem:{},rerollCounts:[0,0,0]}
+            };
+          }
+
+          const directed = ctx('manual-enabler', makeDirectedBinding('A','B'));
+          const pinned = chooseAnchor(items, directed.ctx, {mode:'exact',itemId:'requires_restricted_receiver',directionKey:'binding'});
+          if (!pinned.chosen) throw new Error('manual restricted anchor unavailable');
+          if (pinned.chosen.reachability.direct !== false || pinned.chosen.reachability.enabler !== 'light_restraint') throw new Error(`forced enabler mismatch: ${JSON.stringify(pinned.chosen.reachability)}`);
+          const gen = generateStages(items,directed.ctx,pinned.chosen,directed.slotsByStage);
+          const enablers=gen.results.filter(step=>step.item?.id==='light_restraint');
+          const mains=gen.results.filter(step=>step.kind==='main'&&step.item?.id==='requires_restricted_receiver');
+          if(enablers.length!==1||mains.length!==1) throw new Error('manual anchor/enabler not emitted exactly once');
+
+          for (const seed of ['direction-seed-1','direction-seed-2']) {
+            const egal = ctx(seed, makeEgalitarianBinding(['A','B']));
+            const all = enumerateAnchorCandidates(items, egal.ctx, {directionMode:'all'});
+            const dirs = all.filter(c=>c.item.id==='verbal_direction').map(c=>c.directionKey);
+            if(!dirs.includes('A->B')||!dirs.includes('B->A')) throw new Error(`manual directions missing: ${JSON.stringify(dirs)}`);
+            const ab=chooseAnchor(items,egal.ctx,{mode:'exact',itemId:'verbal_direction',directionKey:'A->B'});
+            const ba=chooseAnchor(items,egal.ctx,{mode:'exact',itemId:'verbal_direction',directionKey:'B->A'});
+            if(ab.chosen?.direction?.actorId!=='A'||ab.chosen?.direction?.receiverId!=='B') throw new Error('A->B direction not pinned');
+            if(ba.chosen?.direction?.actorId!=='B'||ba.chosen?.direction?.receiverId!=='A') throw new Error('B->A direction not pinned');
+          }
+
+          const categoryCtx = ctx('category-seed', makeDirectedBinding('A','B'));
+          const category = chooseAnchor(items, categoryCtx.ctx, {mode:'category',category:'basic_intimacy'});
+          if (!category.chosen || category.chosen.item.category !== 'basic_intimacy') throw new Error('category filter failed');
+
+          console.log(JSON.stringify({schema:'pass',compiler:'pass',regression:'pass',manualEnabler:'pass',manualDirection:'pass',category:'pass'}));
+          NODE
