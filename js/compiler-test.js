@@ -50,9 +50,12 @@ export function runCompilerSmokeTests() {
   assert(!prompt.includes('{actor}') && !prompt.includes('{receiver}'), 'unresolved placeholders remain', failures);
   assert(count(prompt, '甲 將主軸事件落在 乙 身上。') === 1, 'Main Anchor action text should appear exactly once', failures);
   assert(prompt.includes('【起始階段】') && prompt.includes('【推進階段】') && prompt.includes('【深化階段】'), 'stage headings missing', failures);
-  assert(prompt.includes('在此階段執行上方主軸'), 'Main Anchor stage marker missing', failures);
+  assert(prompt.includes('本篇核心：主軸事件（第 3 階段）'), 'Main Anchor summary missing', failures);
+  assert(prompt.includes('【深化階段】\n- 核心事件：甲 將主軸事件落在 乙 身上。'), 'Main Anchor action should live in its assigned stage', failures);
+  assert(!prompt.includes('在此階段執行上方主軸'), 'legacy self-reference marker should be removed', failures);
   assert(prompt.includes('必要鋪墊：甲 先調整 乙 的位置。'), 'forced enabler should be marked as required setup', failures);
-  assert(prompt.includes('自然、清楚的成人用語') && prompt.includes('快速升溫'), 'default story controls missing', failures);
+  assert(prompt.includes('約 800–1600 個中文字') && prompt.includes('自然、清楚的成人用語') && prompt.includes('快速升溫'), 'default story controls missing', failures);
+  assert(prompt.includes('不得由身體設定、攜帶道具或外在呈現反推性別'), 'gender-pronoun consistency guard missing', failures);
   assert(prompt.includes('身體設定：陰道、口部、雙手'), 'character physical constraints missing or not localized', failures);
 
   const custom = compileStoryPrompt({
@@ -61,7 +64,7 @@ export function runCompilerSmokeTests() {
     sceneConfig:{privacy:'semi'},
     storyConfig:{length:'ultra_short',pace:'slow_burn',lexicalDirectness:'direct',descriptionFocus:'dialogue',adultContentShare:'high'}
   });
-  assert(custom.includes('極短篇') && custom.includes('慢熱') && custom.includes('直接明確的成人用語') && custom.includes('優先描寫對話') && custom.includes('成人互動是主要篇幅'), 'custom story controls not applied', failures);
+  assert(custom.includes('極短篇') && custom.includes('約 500–900 個中文字') && custom.includes('慢熱') && custom.includes('直接明確的成人用語') && custom.includes('優先描寫對話') && custom.includes('成人互動是主要篇幅'), 'custom story controls not applied', failures);
 
   const noAnchor = compileStoryPrompt({generation:{results:[]},characters});
   assert(noAnchor.includes('沒有可用的主軸事件；不要自行捏造新的核心玩法。'), 'missing-anchor guard text missing', failures);
