@@ -3,28 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Adult Story Prompt Builder</title>
+  <title>成人故事 Prompt Builder</title>
   <style>
-    :root{color-scheme:dark;--bg:#0d0f12;--panel:#16191f;--panel2:#1d2129;--line:#303641;--text:#eef1f5;--muted:#aab2bf;--accent:#d9e2ff}
+    :root{color-scheme:dark;--bg:#0d0f12;--panel:#16191f;--panel2:#1d2129;--line:#303641;--text:#eef1f5;--muted:#aab2bf;--accent:#d9e2ff;--warn:#ffd59a;--danger:#ffb8b8}
     *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.5}
     main{max-width:1440px;margin:0 auto;padding:28px}.topbar{display:flex;gap:20px;justify-content:space-between;align-items:flex-start;margin-bottom:22px}.topbar h1{margin:0 0 4px;font-size:28px}.topbar p{margin:0;color:var(--muted)}
     .layout{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(420px,.95fr);gap:20px;align-items:start}.stack{display:grid;gap:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}.card h2{font-size:18px;margin:0 0 14px}.card h3{font-size:15px;margin:16px 0 10px;color:var(--accent)}
     .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.field{display:grid;gap:5px}.field>span,.legend{font-size:13px;color:var(--muted)}
     input,select,textarea,button{font:inherit} input,select,textarea{width:100%;padding:9px 10px;border:1px solid #434b58;border-radius:8px;background:#101318;color:var(--text)} textarea{min-height:74px;resize:vertical}
     .checks{display:flex;flex-wrap:wrap;gap:8px}.check{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;font-size:13px}.check input{width:auto;margin:0}
-    .hint{font-size:12px;color:var(--muted);margin:6px 0 0}.actions{display:flex;gap:10px;align-items:center;position:sticky;bottom:12px;background:rgba(13,15,18,.92);padding:10px 0;backdrop-filter:blur(8px)} button{border:1px solid #596274;background:#252b35;color:var(--text);border-radius:9px;padding:10px 15px;cursor:pointer}button.primary{background:#e5eaff;color:#11151b;border-color:#e5eaff;font-weight:700}button.secondary{background:#171b22}.status{font-size:13px;color:var(--muted)}
+    .hint{font-size:12px;color:var(--muted);margin:6px 0 0}.warning{font-size:13px;color:var(--warn);margin:10px 0 0;min-height:1.4em}.actions{display:flex;gap:10px;align-items:center;position:sticky;bottom:12px;background:rgba(13,15,18,.92);padding:10px 0;backdrop-filter:blur(8px)}
+    button{border:1px solid #596274;background:#252b35;color:var(--text);border-radius:9px;padding:10px 15px;cursor:pointer}button.primary{background:#e5eaff;color:#11151b;border-color:#e5eaff;font-weight:700}button.secondary{background:#171b22}.status{font-size:13px;color:var(--muted)}
     .preview{position:sticky;top:18px}.preview pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0b0d10;border:1px solid var(--line);border-radius:10px;padding:16px;max-height:68vh;overflow:auto;margin:0}.preview-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.preview-head h2{margin:0}.tools{display:flex;gap:8px}
-    details{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;color:var(--muted)}details pre{margin-top:10px;max-height:320px}
-    nav{font-size:13px;color:var(--muted);margin-top:10px}nav a{color:#cbd5ff;text-decoration:none;margin-right:12px}.error{color:#ffb8b8}
+    details{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}summary{cursor:pointer;color:var(--muted)}details pre{margin-top:10px;max-height:320px}.error{color:var(--danger)}.dev-only{display:none}.dev-links a{color:#cbd5ff;text-decoration:none;margin-right:12px;font-size:13px}
     @media(max-width:980px){main{padding:18px}.layout{grid-template-columns:1fr}.preview{position:static}.grid3{grid-template-columns:1fr 1fr}}
-    @media(max-width:620px){.grid2,.grid3{grid-template-columns:1fr}.topbar{display:block}.tools{flex-wrap:wrap}}
+    @media(max-width:620px){.grid2,.grid3{grid-template-columns:1fr}.topbar{display:block}.tools,.actions{flex-wrap:wrap}.actions button{flex:1 1 150px}.preview pre{max-height:none}}
   </style>
 </head>
 <body>
 <main>
   <header class="topbar">
-    <div><h1>Adult Story Prompt Builder</h1><p>兩位成年虛構角色 · 本地靜態工具 · 生成可直接交給文字模型的故事 Prompt</p></div>
-    <nav><a href="compiler-test.html">Compiler test</a><a href="test.html">Regression</a><a href="quality.html">Quality Gate</a><a href="explain.html">Explain</a></nav>
+    <div>
+      <h1>成人故事 Prompt Builder</h1>
+      <p>兩位成年虛構角色 · 在瀏覽器本機產生可直接交給文字模型的故事 Prompt</p>
+    </div>
   </header>
 
   <div class="layout">
@@ -33,70 +35,77 @@
         <h2>角色 A</h2>
         <div class="grid3">
           <label class="field"><span>名稱</span><input id="a-name" value="角色A"></label>
-          <label class="field"><span>Gender（敘事）</span><select id="a-gender"><option value="female">female</option><option value="male">male</option><option value="nonbinary">nonbinary</option><option value="unspecified">unspecified</option></select></label>
-          <label class="field"><span>Presentation</span><select id="a-presentation"><option value="androgynous">androgynous</option><option value="feminine">feminine</option><option value="masculine">masculine</option><option value="unspecified">unspecified</option></select></label>
-          <label class="field"><span>Archetype</span><input id="a-archetype" value="cold"></label>
-          <label class="field"><span>角色偏好</span><input id="a-role" placeholder="例如：較強勢、嘴硬、主動"></label>
-          <label class="field"><span>其他描述</span><input id="a-note" placeholder="外觀、個性、關係補充"></label>
+          <label class="field"><span>性別設定</span><select id="a-gender"><option value="female">女性</option><option value="male">男性</option><option value="nonbinary">非二元</option><option value="unspecified">不指定</option></select></label>
+          <label class="field"><span>外在呈現</span><select id="a-presentation"><option value="androgynous">中性</option><option value="feminine">女性化</option><option value="masculine">男性化</option><option value="unspecified">不指定</option></select></label>
+          <label class="field"><span>角色類型</span><input id="a-archetype" value="冷淡" placeholder="例如：冷淡、傲嬌、溫柔"></label>
+          <label class="field"><span>互動傾向</span><input id="a-role" placeholder="例如：較強勢、主動、嘴硬"></label>
+          <label class="field"><span>其他角色描述</span><input id="a-note" placeholder="外觀、個性、兩人關係等補充"></label>
         </div>
-        <h3>身體條件（決定 eligibility，與 gender 分離）</h3>
+        <h3>身體設定</h3>
+        <p class="hint">這些設定會影響系統可以安排哪些互動，與上方的性別設定分開判斷。</p>
         <div class="checks" id="a-anatomy">
-          <label class="check"><input type="checkbox" value="vagina" checked>vagina</label><label class="check"><input type="checkbox" value="penis">penis</label><label class="check"><input type="checkbox" value="breasts" checked>breasts</label><label class="check"><input type="checkbox" value="anus" checked>anus</label><label class="check"><input type="checkbox" value="mouth" checked>mouth</label><label class="check"><input type="checkbox" value="hands" checked>hands</label>
+          <label class="check"><input type="checkbox" value="vagina" checked>陰道</label><label class="check"><input type="checkbox" value="penis">陰莖</label><label class="check"><input type="checkbox" value="breasts" checked>胸部</label><label class="check"><input type="checkbox" value="anus" checked>肛門</label><label class="check"><input type="checkbox" value="mouth" checked>口部</label><label class="check"><input type="checkbox" value="hands" checked>雙手</label>
         </div>
-        <h3>Equipment</h3><div class="checks" id="a-equipment"><label class="check"><input type="checkbox" value="strap_on">strap_on</label></div>
+        <h3>攜帶道具</h3><div class="checks" id="a-equipment"><label class="check"><input type="checkbox" value="strap_on">穿戴式道具</label></div>
       </section>
 
       <section class="card">
         <h2>角色 B</h2>
         <div class="grid3">
           <label class="field"><span>名稱</span><input id="b-name" value="角色B"></label>
-          <label class="field"><span>Gender（敘事）</span><select id="b-gender"><option value="female">female</option><option value="male">male</option><option value="nonbinary">nonbinary</option><option value="unspecified">unspecified</option></select></label>
-          <label class="field"><span>Presentation</span><select id="b-presentation"><option value="feminine">feminine</option><option value="androgynous">androgynous</option><option value="masculine">masculine</option><option value="unspecified">unspecified</option></select></label>
-          <label class="field"><span>Archetype</span><input id="b-archetype" value="reserved"></label>
-          <label class="field"><span>角色偏好</span><input id="b-role" placeholder="例如：弱氣、克制、被動"></label>
-          <label class="field"><span>其他描述</span><input id="b-note" placeholder="外觀、個性、關係補充"></label>
+          <label class="field"><span>性別設定</span><select id="b-gender"><option value="female">女性</option><option value="male">男性</option><option value="nonbinary">非二元</option><option value="unspecified">不指定</option></select></label>
+          <label class="field"><span>外在呈現</span><select id="b-presentation"><option value="feminine">女性化</option><option value="androgynous">中性</option><option value="masculine">男性化</option><option value="unspecified">不指定</option></select></label>
+          <label class="field"><span>角色類型</span><input id="b-archetype" value="克制" placeholder="例如：克制、害羞、直率"></label>
+          <label class="field"><span>互動傾向</span><input id="b-role" placeholder="例如：較被動、弱氣、克制"></label>
+          <label class="field"><span>其他角色描述</span><input id="b-note" placeholder="外觀、個性、兩人關係等補充"></label>
         </div>
-        <h3>身體條件（決定 eligibility，與 gender 分離）</h3>
+        <h3>身體設定</h3>
+        <p class="hint">這些設定會影響系統可以安排哪些互動，與上方的性別設定分開判斷。</p>
         <div class="checks" id="b-anatomy">
-          <label class="check"><input type="checkbox" value="vagina" checked>vagina</label><label class="check"><input type="checkbox" value="penis">penis</label><label class="check"><input type="checkbox" value="breasts" checked>breasts</label><label class="check"><input type="checkbox" value="anus" checked>anus</label><label class="check"><input type="checkbox" value="mouth" checked>mouth</label><label class="check"><input type="checkbox" value="hands" checked>hands</label>
+          <label class="check"><input type="checkbox" value="vagina" checked>陰道</label><label class="check"><input type="checkbox" value="penis">陰莖</label><label class="check"><input type="checkbox" value="breasts" checked>胸部</label><label class="check"><input type="checkbox" value="anus" checked>肛門</label><label class="check"><input type="checkbox" value="mouth" checked>口部</label><label class="check"><input type="checkbox" value="hands" checked>雙手</label>
         </div>
-        <h3>Equipment</h3><div class="checks" id="b-equipment"><label class="check"><input type="checkbox" value="strap_on">strap_on</label></div>
+        <h3>攜帶道具</h3><div class="checks" id="b-equipment"><label class="check"><input type="checkbox" value="strap_on">穿戴式道具</label></div>
       </section>
 
       <section class="card">
         <h2>場景與互動</h2>
         <div class="grid3">
-          <label class="field"><span>Binding</span><select id="binding"><option value="directed">Directed（A → B）</option><option value="egalitarian">Egalitarian（互相）</option></select></label>
-          <label class="field"><span>最大玩法強度</span><select id="intensity"><option value="1">Light</option><option value="2">Medium</option><option value="3" selected>Heavy</option></select></label>
-          <label class="field"><span>Seed</span><input id="seed" value="demo-001"></label>
-          <label class="field"><span>Privacy</span><select id="privacy"><option value="private">private</option><option value="semi">semi</option><option value="public">public</option></select></label>
-          <label class="field"><span>Location</span><input id="location" value="bedroom"></label>
-          <label class="field"><span>Props（逗號分隔）</span><input id="props" value="mirror"></label>
+          <label class="field"><span>互動模式</span><select id="binding"><option value="directed">A 主導 B</option><option value="egalitarian">雙方互動，主動權可互換</option></select></label>
+          <label class="field"><span>最大玩法強度</span><select id="intensity"><option value="1">輕度</option><option value="2">中度</option><option value="3" selected>高度</option></select></label>
+          <label class="field"><span>隨機種子</span><input id="seed" value="demo-001"></label>
+          <label class="field"><span>隱私程度</span><select id="privacy"><option value="private">私密</option><option value="semi">半公開</option><option value="public">公開</option></select></label>
+          <label class="field"><span>場景地點</span><input id="location" value="臥室" placeholder="例如：臥室、休息室、更衣室"></label>
+          <label class="field"><span>場景道具（逗號分隔）</span><input id="props" value="鏡子" placeholder="例如：鏡子, 椅子"></label>
         </div>
         <p class="hint">玩法強度是可選內容的上限；文字直接度在下方獨立設定。</p>
+        <p class="warning" id="scene-warning"></p>
       </section>
 
       <section class="card">
         <h2>故事輸出</h2>
         <div class="grid3">
-          <label class="field"><span>篇幅</span><select id="length"><option value="ultra_short">極短</option><option value="short" selected>短篇</option><option value="medium">中篇</option></select></label>
-          <label class="field"><span>開場</span><select id="opening"><option value="direct" selected>直接切入</option><option value="situational">短場景切入</option></select></label>
+          <label class="field"><span>建議篇幅</span><select id="length"><option value="ultra_short">極短</option><option value="short" selected>短篇</option><option value="medium">中篇</option></select></label>
+          <label class="field"><span>開場方式</span><select id="opening"><option value="direct" selected>直接切入</option><option value="situational">短場景切入</option></select></label>
           <label class="field"><span>節奏</span><select id="pace"><option value="direct">直接</option><option value="quick_escalation" selected>快速升溫</option><option value="gradual">漸進</option><option value="slow_burn">慢熱</option><option value="wave">波浪式</option></select></label>
           <label class="field"><span>寫作風格</span><select id="writing-style"><option value="character_driven" selected>角色驅動</option><option value="dialogue_heavy">對話偏重</option><option value="sensory">感官偏重</option><option value="concise">俐落</option></select></label>
           <label class="field"><span>文字直接度</span><select id="directness"><option value="subtle">含蓄</option><option value="balanced" selected>平衡</option><option value="direct">直接</option><option value="very_direct">非常直接</option></select></label>
           <label class="field"><span>成人內容占比</span><select id="adult-share"><option value="low">低</option><option value="medium" selected>中</option><option value="high">高</option></select></label>
-          <label class="field"><span>描寫焦點</span><select id="focus"><option value="interaction" selected>互動</option><option value="dialogue">對話</option><option value="emotion">情緒</option><option value="physical">動作 / 空間</option></select></label>
+          <label class="field"><span>描寫焦點</span><select id="focus"><option value="interaction" selected>雙方互動</option><option value="dialogue">對話</option><option value="emotion">情緒</option><option value="physical">動作與空間</option></select></label>
         </div>
       </section>
 
-      <div class="actions"><button class="primary" id="generate">Generate Prompt</button><button class="secondary" id="random-seed">換 Seed</button><span class="status" id="status">Ready</span></div>
+      <p class="warning" id="form-warning"></p>
+      <div class="actions"><button class="primary" id="generate">生成 Prompt</button><button class="secondary" id="random-seed">換一組並生成</button><span class="status" id="status">準備完成</span></div>
     </div>
 
     <aside class="preview card">
-      <div class="preview-head"><h2>最終 Prompt</h2><div class="tools"><button class="secondary" id="copy-prompt">Copy</button></div></div>
+      <div class="preview-head"><h2>最終 Prompt</h2><div class="tools"><button class="secondary" id="copy-prompt">複製 Prompt</button></div></div>
       <pre id="prompt">尚未生成。</pre>
-      <details><summary>生成細節 / Debug</summary><pre id="result"></pre></details>
-      <details><summary>Dataset validation</summary><pre id="schema"></pre></details>
+      <div class="dev-only" id="developer-tools">
+        <details><summary>生成細節 / Debug</summary><pre id="result"></pre></details>
+        <details><summary>資料驗證</summary><pre id="schema"></pre></details>
+        <details><summary>開發工具</summary><p class="dev-links"><a href="compiler-test.html">Compiler test</a><a href="test.html">Regression</a><a href="quality.html">Quality Gate</a><a href="explain.html">Explain</a></p></details>
+      </div>
     </aside>
   </div>
 </main>

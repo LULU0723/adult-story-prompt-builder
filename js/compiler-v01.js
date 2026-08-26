@@ -55,6 +55,12 @@ const FOCUS_TEXT = Object.freeze({
 });
 
 const STAGE_LABELS = Object.freeze({ 1: '起始', 2: '推進', 3: '深化' });
+const GENDER_TEXT = Object.freeze({ female:'女性', male:'男性', nonbinary:'非二元', unspecified:'不指定' });
+const PRESENTATION_TEXT = Object.freeze({ feminine:'女性化', masculine:'男性化', androgynous:'中性', unspecified:'不指定' });
+const ANATOMY_TEXT = Object.freeze({ vagina:'陰道', penis:'陰莖', breasts:'胸部', anus:'肛門', mouth:'口部', hands:'雙手' });
+const EQUIPMENT_TEXT = Object.freeze({ strap_on:'穿戴式道具' });
+const PRIVACY_TEXT = Object.freeze({ private:'私密', semi:'半公開', public:'公開' });
+const SCENE_PROP_TEXT = Object.freeze({ mirror:'鏡子' });
 
 function safeArray(value) { return Array.isArray(value) ? value : []; }
 function normalizeCharacters(characters) {
@@ -66,6 +72,8 @@ function charactersById(characters) {
   return Object.fromEntries(normalizeCharacters(characters).map(character => [character.id, character]));
 }
 function displayName(character, fallback) { return character?.displayName || character?.name || character?.id || fallback; }
+function displayValue(map, value) { return map[value] || value; }
+function displayList(map, values) { return safeArray(values).map(value => displayValue(map, value)).join('、'); }
 
 function renderTemplate(step, byId) {
   const actorId = step.direction?.actorId;
@@ -79,26 +87,26 @@ function renderTemplate(step, byId) {
 function describeCharacter(character) {
   const name = displayName(character, '未命名角色');
   const parts = [];
-  if (character.gender) parts.push(`gender=${character.gender}`);
-  if (character.presentation) parts.push(`presentation=${character.presentation}`);
-  if (character.archetype) parts.push(`archetype=${character.archetype}`);
-  if (character.relationshipRole) parts.push(`relationshipRole=${character.relationshipRole}`);
-  if (character.rolePreference) parts.push(`rolePreference=${character.rolePreference}`);
-  if (character.narrativeNote) parts.push(`note=${character.narrativeNote}`);
-  if (safeArray(character.anatomy).length) parts.push(`anatomy=[${character.anatomy.join(', ')}]`);
-  if (safeArray(character.equipment).length) parts.push(`equipment=[${character.equipment.join(', ')}]`);
+  if (character.gender) parts.push(`性別設定：${displayValue(GENDER_TEXT, character.gender)}`);
+  if (character.presentation) parts.push(`外在呈現：${displayValue(PRESENTATION_TEXT, character.presentation)}`);
+  if (character.archetype) parts.push(`角色類型：${character.archetype}`);
+  if (character.relationshipRole) parts.push(`關係定位：${character.relationshipRole}`);
+  if (character.rolePreference) parts.push(`互動傾向：${character.rolePreference}`);
+  if (character.narrativeNote) parts.push(`補充描述：${character.narrativeNote}`);
+  if (safeArray(character.anatomy).length) parts.push(`身體設定：${displayList(ANATOMY_TEXT, character.anatomy)}`);
+  if (safeArray(character.equipment).length) parts.push(`攜帶道具：${displayList(EQUIPMENT_TEXT, character.equipment)}`);
   if (character.traits && typeof character.traits === 'object') {
-    const traits = Object.entries(character.traits).map(([key, value]) => `${key}:${value}`).join(', ');
-    if (traits) parts.push(`traits={${traits}}`);
+    const traits = Object.entries(character.traits).map(([key, value]) => `${key}:${value}`).join('、');
+    if (traits) parts.push(`特質：${traits}`);
   }
   return `- ${name}${parts.length ? `：${parts.join('；')}` : ''}`;
 }
 
 function describeScene(sceneConfig = {}) {
   const parts = [];
-  if (sceneConfig.location) parts.push(`location=${sceneConfig.location}`);
-  if (sceneConfig.privacy) parts.push(`privacy=${sceneConfig.privacy}`);
-  if (safeArray(sceneConfig.props).length) parts.push(`props=[${sceneConfig.props.join(', ')}]`);
+  if (sceneConfig.location) parts.push(`地點：${sceneConfig.location}`);
+  if (sceneConfig.privacy) parts.push(`隱私程度：${displayValue(PRIVACY_TEXT, sceneConfig.privacy)}`);
+  if (safeArray(sceneConfig.props).length) parts.push(`場景道具：${displayList(SCENE_PROP_TEXT, sceneConfig.props)}`);
   return parts.length ? parts.join('；') : '未指定額外場景條件。';
 }
 
@@ -107,8 +115,9 @@ function readConfig(map, value, fallbackKey) { return map[value] || map[fallback
 function stageLines(generation, byId) {
   const grouped = new Map([[1, []], [2, []], [3, []]]);
   for (const step of generation?.results ?? []) {
+    if (step.kind === 'anchor-error') continue;
     if (!step.item || !grouped.has(step.stage)) continue;
-    grouped.get(step.stage).push({ kind: step.kind, text: renderTemplate(step, byId) });
+    grouped.get(step.stage).push({ kind: step.kind, forcedItemId: step.forcedItemId || null, text: renderTemplate(step, byId) });
   }
   const lines = [];
   for (const stage of [1, 2, 3]) {
@@ -117,10 +126,10 @@ function stageLines(generation, byId) {
     lines.push(`【${STAGE_LABELS[stage]}階段】`);
     for (const beat of beats) {
       if (beat.kind === 'main') {
-        lines.push('- Main Anchor：在此階段執行上方主軸；不要重複成兩個不同事件。');
+        lines.push('- 主軸事件：在此階段執行上方主軸；不要重複成兩個不同事件。');
         continue;
       }
-      const prefix = beat.kind === 'forced-enabler' ? '必要鋪墊' : '互動節點';
+      const prefix = beat.forcedItemId ? '必要鋪墊' : '互動節點';
       lines.push(`- ${prefix}：${beat.text}`);
     }
   }
@@ -133,9 +142,7 @@ function findMainAnchor(generation, byId) {
   return { id: main.item.id, label: main.item.label || main.item.id, stage: main.stage, text: renderTemplate(main, byId) };
 }
 
-export function normalizeStoryConfig(input = {}) {
-  return { ...DEFAULT_STORY_CONFIG, ...(input || {}) };
-}
+export function normalizeStoryConfig(input = {}) { return { ...DEFAULT_STORY_CONFIG, ...(input || {}) }; }
 
 export function compileStoryPrompt({ generation, characters, sceneConfig = {}, storyConfig = {} } = {}) {
   const normalizedCharacters = normalizeCharacters(characters);
@@ -148,19 +155,16 @@ export function compileStoryPrompt({ generation, characters, sceneConfig = {}, s
   lines.push('根據以下角色設定、場景限制與互動節點，寫成一段連續、自然、有角色性的成人虛構故事。不要把節點逐條照抄成清單；要把它們轉化成有因果、反應與節奏的完整場景。');
   lines.push('所有角色皆為成年人。');
   lines.push('');
-
   lines.push('【角色設定】');
   if (normalizedCharacters.length) for (const character of normalizedCharacters) lines.push(describeCharacter(character));
   else lines.push('- 未提供角色資料。');
   lines.push('');
-
   lines.push('【場景】');
   lines.push(describeScene(sceneConfig));
   lines.push('場景條件是固定限制，不要為了方便劇情自行改變隱私程度、地點或道具存在狀態。');
   lines.push('');
-
   lines.push('【敘事控制】');
-  lines.push(`- 篇幅：${readConfig(LENGTH_TEXT, config.length, 'short')}`);
+  lines.push(`- 建議篇幅：${readConfig(LENGTH_TEXT, config.length, 'short')}`);
   lines.push(`- 開場：${readConfig(OPENING_TEXT, config.opening, 'direct')}`);
   lines.push(`- 節奏：${readConfig(PACE_TEXT, config.pace, 'quick_escalation')}`);
   lines.push(`- 寫作風格：${readConfig(STYLE_TEXT, config.writingStyle, 'character_driven')}`);
@@ -168,35 +172,30 @@ export function compileStoryPrompt({ generation, characters, sceneConfig = {}, s
   lines.push(`- 成人內容占比：${readConfig(ADULT_SHARE_TEXT, config.adultContentShare, 'medium')}`);
   lines.push(`- 描寫焦點：${readConfig(FOCUS_TEXT, config.descriptionFocus, 'interaction')}`);
   lines.push('');
-
   lines.push('【主軸】');
   if (anchor) {
-    lines.push(`Main Anchor：${anchor.label}（Stage ${anchor.stage}）`);
+    lines.push(`主軸事件：${anchor.label}（第 ${anchor.stage} 階段）`);
     lines.push(anchor.text);
-    lines.push('Main Anchor 是這一段故事最重要的互動核心；前後內容應該鋪墊、強化或回應它，而不是被其他節點搶走主題。');
+    lines.push('主軸事件是這一段故事最重要的互動核心；前後內容應該鋪墊、強化或回應它，而不是被其他節點搶走主題。');
   } else {
-    lines.push('沒有可用的 Main Anchor；不要自行捏造新的核心玩法。');
+    lines.push('沒有可用的主軸事件；不要自行捏造新的核心玩法。');
   }
   lines.push('');
-
   lines.push('【互動節點】');
   const beats = stageLines(generation, byId);
   if (beats.length) lines.push(...beats);
   else lines.push('沒有可用節點。');
   lines.push('');
-
   lines.push('【一致性要求】');
   lines.push('- 保持角色身體設定、道具所有權、角色方向與行動限制前後一致。');
-  lines.push('- 不要替角色新增未提供的 anatomy 或 equipment，也不要把 receiver 的身體條件錯算到 actor。');
-  lines.push('- 若節點包含角色方向，執行時要維持該 actor / receiver 關係；mutual 節點則不要硬改寫成單方面支配。');
+  lines.push('- 不要替角色新增未提供的身體條件或道具，也不要把其中一人的身體條件錯算到另一人。');
+  lines.push('- 若節點包含角色方向，執行時要維持指定的主動方與接受方；雙方互動節點則不要硬改寫成單方面支配。');
   lines.push('- 玩法強度代表允許的上限，不是每一段都必須寫到最高強度。');
-  lines.push('- 文字直接度只控制措辭，不應改變玩法 eligibility 或身體設定。');
+  lines.push('- 文字直接度只控制措辭，不應改變可選玩法或身體設定。');
   lines.push('- 避免為了補字數重複同一個動作、對話或情緒。');
   lines.push('');
-
   lines.push('【輸出方式】');
   lines.push('直接開始故事正文，不要解釋規則、不要輸出分析、不要重列設定表。');
   lines.push('結尾不需要刻意完整收束；在當前情境自然停下即可。');
-
   return lines.join('\n');
 }
