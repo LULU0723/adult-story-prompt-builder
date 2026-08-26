@@ -35,8 +35,24 @@ function choosePinnedAnchorDirection(item, stage, ctx) {
   return { actorId, receiverId };
 }
 
+function allManualDirections(item, stage, ctx) {
+  if (ctx.binding?.mode !== "egalitarian" || item.roleShape === "mutual") {
+    return [choosePinnedAnchorDirection(item, stage, ctx)];
+  }
+  const [firstId, secondId] = ctx.binding.characterIds ?? [];
+  if (!firstId || !secondId) throw new Error("egalitarian binding is missing characterIds");
+  return [
+    { actorId: firstId, receiverId: secondId },
+    { actorId: secondId, receiverId: firstId }
+  ];
+}
+
 function effectiveDirection(ctx, pinnedDirection) {
   return pinnedDirection ?? { actorId: ctx.actorId, receiverId: ctx.receiverId };
+}
+
+function directionKey(direction) {
+  return direction ? `${direction.actorId}->${direction.receiverId}` : "binding";
 }
 
 export function simulatePathToAnchor(anchor, ctx, enablers, anchorStage, pinnedDirection = null) {
@@ -89,7 +105,7 @@ export function simulatePathToAnchor(anchor, ctx, enablers, anchorStage, pinnedD
   return { reachable: false, direct: false, enabler: null, enablerStage: null, enablerDirection: null };
 }
 
-export function chooseAnchor(items, ctx) {
+export function enumerateAnchorCandidates(items, ctx, { directionMode = "seeded" } = {}) {
   const candidates = [];
   for (const item of items) {
     if ((item.anchorSuitability ?? 0) <= 0) continue;
@@ -101,28 +117,67 @@ export function chooseAnchor(items, ctx) {
     if (allowedStages.length === 0) continue;
 
     const stage = chooseSeededStage(item, allowedStages, ctx);
-    const direction = choosePinnedAnchorDirection(item, stage, ctx);
-    const reachability = simulatePathToAnchor(
-      item,
-      ctx,
-      items.filter(x => x.id !== item.id && x.stageHints.some(s => s < stage)),
-      stage,
-      direction
-    );
-    if (!reachability.reachable) continue;
+    const directions = directionMode === "all"
+      ? allManualDirections(item, stage, ctx)
+      : [choosePinnedAnchorDirection(item, stage, ctx)];
 
-    const score = scoreItem(item, { ...ctx, anchor: null });
-    candidates.push({
-      item,
-      stage,
-      direction,
-      reachability,
-      weight: score.weight * Math.max(1, item.anchorSuitability),
-      score
-    });
+    for (const direction of directions) {
+      const reachability = simulatePathToAnchor(
+        item,
+        ctx,
+        items.filter(x => x.id !== item.id && x.stageHints.some(s => s < stage)),
+        stage,
+        direction
+      );
+      if (!reachability.reachable) continue;
+
+      const score = scoreItem(item, { ...ctx, anchor: null });
+      candidates.push({
+        item,
+        stage,
+        direction,
+        directionKey: directionKey(direction),
+        reachability,
+        weight: score.weight * Math.max(1, item.anchorSuitability),
+        score
+      });
+    }
   }
 
-  candidates.sort((a, b) => a.item.id.localeCompare(b.item.id));
+  candidates.sort((a, b) => {
+    const itemOrder = a.item.id.localeCompare(b.item.id);
+    return itemOrder || a.directionKey.localeCompare(b.directionKey);
+  });
+  return candidates;
+}
+
+export function validatePinnedAnchor({ itemId, directionKey: requestedDirectionKey = null } = {}, candidates = []) {
+  const matches = candidates.filter(candidate => candidate.item.id === itemId);
+  if (!matches.length) return { valid: false, reason: "目前設定下此主軸不可達或不符合條件。", candidate: null };
+  if (requestedDirectionKey) {
+    const exact = matches.find(candidate => candidate.directionKey === requestedDirectionKey);
+    if (!exact) return { valid: false, reason: "目前設定下指定的角色方向不可用。", candidate: null };
+    return { valid: true, reason: null, candidate: exact };
+  }
+  return { valid: true, reason: null, candidate: matches[0] };
+}
+
+export function chooseAnchor(items, ctx, selection = { mode: "auto" }) {
+  const mode = selection?.mode ?? "auto";
+  const directionMode = mode === "exact" ? "all" : "seeded";
+  let candidates = enumerateAnchorCandidates(items, ctx, { directionMode });
+
+  if (mode === "category") {
+    candidates = candidates.filter(candidate => candidate.item.category === selection.category);
+  } else if (mode === "exact") {
+    const validation = validatePinnedAnchor(selection, candidates);
+    return {
+      chosen: validation.candidate,
+      key: validation.candidate ? `manual:${validation.candidate.item.id}:${validation.candidate.directionKey}` : "manual:invalid",
+      candidates,
+      validation
+    };
+  }
 
   const { rng, key } = rngFor({
     dataVersion: ctx.dataVersion,
