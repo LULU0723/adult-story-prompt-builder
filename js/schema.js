@@ -5,6 +5,20 @@ export const STAGES = new Set([1, 2, 3]);
 export const MOBILITY = ["immobilized", "restricted", "partial", "free"];
 export const TRAIT_LEVELS = new Set(["very_low", "low", "mid", "high", "very_high"]);
 export const PERMISSION_STATES = new Set(["allowed", "no_recommend", "disabled"]);
+export const CATEGORIES_V01 = new Set([
+  "basic_intimacy",
+  "dominance_submission",
+  "restraint",
+  "pace_control",
+  "sensory_play",
+  "body_preference",
+  "props_environment",
+  "public_risk",
+  "shame_display",
+  "character_contrast",
+  "context",
+  "bdsm_intense"
+]);
 export const SCHEMA_ERROR_CODES = Object.freeze({
   ROLE_SWITCH_ANCHOR: "schema.role_switch_anchor",
   MUTUAL_ASYMMETRIC_MOBILITY: "schema.mutual_asymmetric_mobility"
@@ -42,6 +56,7 @@ export function validateItem(item) {
 
   if (!item?.id || typeof item.id !== "string") errors.push("id is required");
   if (!item?.label || typeof item.label !== "string") errors.push(`${item?.id ?? "item"}: label is required`);
+  if (!CATEGORIES_V01.has(item?.category)) errors.push(`${item?.id ?? "item"}: unsupported category ${item?.category}`);
   if (!item?.cluster || typeof item.cluster !== "string") errors.push(`${item?.id ?? "item"}: cluster is required`);
   if (!ROLE_SHAPES_V01.has(item?.roleShape)) errors.push(`${item?.id ?? "item"}: unsupported roleShape ${item?.roleShape}`);
   if (!Array.isArray(item?.stageHints) || item.stageHints.length === 0 || item.stageHints.some(x => !STAGES.has(x))) {

@@ -1,10 +1,11 @@
 import { DATA_VERSION, validateDataset } from './schema.js';
 import { deriveProviders } from './providers.js';
 import { makeDirectedBinding, makeEgalitarianBinding } from './binding.js';
-import { chooseAnchor } from './anchor.js';
+import { chooseAnchor, enumerateAnchorCandidates } from './anchor.js';
 import { generateStages } from './stage.js';
 import { compilePrompt } from './compiler-v01.js';
 import { PROJECT_INSTRUCTIONS_V01 } from './project-instructions-v01.js';
+import { itemCopy } from './item-copy-v01.js';
 
 const items = await fetch('./data/adult-items.json').then(r => r.json());
 const validation = validateDataset(items);
@@ -18,6 +19,20 @@ const ANATOMY_PRESETS = Object.freeze({
   common: ['anus', 'mouth', 'hands'],
   clear: []
 });
+const CATEGORY_LABELS = Object.freeze({
+  basic_intimacy: '基礎親密互動',
+  dominance_submission: '主導與控制',
+  restraint: '限制與姿勢控制',
+  pace_control: '節奏與升溫',
+  sensory_play: '感官互動',
+  body_preference: '身體部位偏好',
+  props_environment: '道具互動',
+  public_risk: '公開／半公開風險',
+  shame_display: '展示與視覺',
+  character_contrast: '角色反差',
+  context: '場景情境',
+  bdsm_intense: '高強度控制'
+});
 
 function checkedValues(containerId) {
   return [...document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`)].map(input => input.value);
@@ -29,6 +44,7 @@ function setCheckedValues(containerId, values) {
 function csvValues(value) { return String(value ?? '').split(',').map(part => part.trim()).filter(Boolean); }
 function scenePropValues(value) { return csvValues(value).map(part => SCENE_PROP_ALIASES[part.toLowerCase()] || SCENE_PROP_ALIASES[part] || part); }
 function uniqueValues(values) { return [...new Set(values.filter(Boolean))]; }
+function itemDisplayName(item) { return itemCopy(item)?.displayName || item?.label || item?.id || '未命名玩法'; }
 
 function readCharacter(prefix, fallbackName) {
   return {
@@ -42,6 +58,15 @@ function readCharacter(prefix, fallbackName) {
     narrativeNote: $(`${prefix}-note`).value.trim() || undefined,
     anatomy: checkedValues(`${prefix}-anatomy`),
     equipment: checkedValues(`${prefix}-equipment`)
+  };
+}
+
+function readMainPlaySelection() {
+  return {
+    mode: $('main-play-mode')?.value || 'auto',
+    category: $('main-play-category')?.value || null,
+    itemId: $('main-play-item')?.value || null,
+    directionKey: $('main-play-direction')?.value || null
   };
 }
 
@@ -69,7 +94,8 @@ export function readProductForm() {
     promptMode: $('prompt-mode')?.value || 'standalone',
     bindingMode: $('binding').value,
     masterSeed: $('seed').value.trim() || 'demo-001',
-    userMaxIntensity: Number($('intensity').value || 3)
+    userMaxIntensity: Number($('intensity').value || 3),
+    mainPlay: readMainPlaySelection()
   };
 }
 
@@ -105,10 +131,24 @@ function buildGenerationContext(form) {
   };
 }
 
+function anchorSelectionForEngine(form) {
+  if (form.mainPlay.mode === 'category') return { mode: 'category', category: form.mainPlay.category };
+  if (form.mainPlay.mode === 'exact') return { mode: 'exact', itemId: form.mainPlay.itemId, directionKey: form.mainPlay.directionKey };
+  return { mode: 'auto' };
+}
+
 export function generateFromForm(form) {
   const { ctx, slotsByStage } = buildGenerationContext(form);
-  const anchorResult = chooseAnchor(items, ctx);
-  if (!anchorResult.chosen) return { error: '目前設定找不到可達的主軸事件。可嘗試提高玩法強度、調整身體設定／道具、隱私程度，或更換隨機種子。', anchorResult };
+  const anchorResult = chooseAnchor(items, ctx, anchorSelectionForEngine(form));
+  if (!anchorResult.chosen) {
+    const manual = form.mainPlay.mode !== 'auto';
+    return {
+      error: manual
+        ? (anchorResult.validation?.reason || '目前設定下找不到符合指定 Main Play 的可達主軸。請調整類型、玩法、方向、強度或角色設定。')
+        : '目前設定找不到可達的主軸事件。可嘗試提高玩法強度、調整身體設定／道具、隱私程度，或更換隨機種子。',
+      anchorResult
+    };
+  }
   const generation = generateStages(items, ctx, anchorResult.chosen, slotsByStage);
   return {
     anchor: anchorResult.chosen,
@@ -126,6 +166,8 @@ export function generateFromForm(form) {
 function validateProductForm(form) {
   const errors = [];
   for (const character of form.characters) if (!character.anatomy.length) errors.push(`${character.displayName} 尚未勾選任何身體設定。請至少選擇一項後再生成。`);
+  if (form.mainPlay.mode === 'category' && !form.mainPlay.category) errors.push('請選擇 Main Play 類型。');
+  if (form.mainPlay.mode === 'exact' && !form.mainPlay.itemId) errors.push('請選擇具體 Main Play。');
   return errors;
 }
 function sceneWarning(form) {
@@ -154,11 +196,99 @@ function applyAnatomyPreset(target, presetName) {
   const values = ANATOMY_PRESETS[presetName];
   if (!values) return;
   setCheckedValues(`${target}-anatomy`, values);
+  refreshMainPlayPicker();
   updateFormFeedback();
   $('status').textContent = presetName === 'clear' ? '身體設定已清空' : '已套用身體設定，可再自行調整';
 }
 function isCompactLayout() { return globalThis.matchMedia?.('(max-width: 980px)').matches ?? false; }
 function scrollToPrompt() { if (isCompactLayout()) $('prompt-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+function installMainPlayPickerUi() {
+  const binding = $('binding');
+  const card = binding?.closest('.card');
+  const grid = binding?.closest('.grid3');
+  if (!card || !grid || $('main-play-picker')) return;
+  const wrapper = document.createElement('div');
+  wrapper.id = 'main-play-picker';
+  wrapper.innerHTML = `
+    <h3>Main Play 主軸</h3>
+    <div class="grid3">
+      <label class="field"><span>主軸選擇</span><select id="main-play-mode"><option value="auto" selected>自動選擇</option><option value="category">指定類型</option><option value="exact">指定玩法</option></select></label>
+      <label class="field" id="main-play-category-field" hidden><span>玩法類型</span><select id="main-play-category"></select></label>
+      <label class="field" id="main-play-item-field" hidden><span>具體玩法</span><select id="main-play-item"></select></label>
+      <label class="field" id="main-play-direction-field" hidden><span>角色方向</span><select id="main-play-direction"></select></label>
+    </div>
+    <p class="hint" id="main-play-hint">自動選擇會依目前設定、強度與隨機種子安排可達的主軸。</p>`;
+  grid.insertAdjacentElement('afterend', wrapper);
+}
+
+function setSelectOptions(select, entries, previousValue) {
+  if (!select) return null;
+  select.replaceChildren(...entries.map(({ value, label }) => {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    return option;
+  }));
+  if (entries.some(entry => entry.value === previousValue)) select.value = previousValue;
+  return select.value || null;
+}
+
+function pickerCandidates(form) {
+  const { ctx } = buildGenerationContext(form);
+  return enumerateAnchorCandidates(items, ctx, { directionMode: 'all' });
+}
+
+function refreshMainPlayPicker() {
+  if (!$('main-play-mode')) return;
+  const form = readProductForm();
+  const mode = $('main-play-mode').value;
+  const candidates = pickerCandidates(form);
+  const categoryField = $('main-play-category-field');
+  const itemField = $('main-play-item-field');
+  const directionField = $('main-play-direction-field');
+  categoryField.hidden = mode === 'auto';
+  itemField.hidden = mode !== 'exact';
+  directionField.hidden = true;
+
+  if (mode === 'auto') {
+    $('main-play-hint').textContent = `目前共有 ${new Set(candidates.map(candidate => candidate.item.id)).size} 個可達主軸玩法；由系統自動選擇。`;
+    return;
+  }
+
+  const categoryEntries = [...new Set(candidates.map(candidate => candidate.item.category))]
+    .sort((a, b) => (CATEGORY_LABELS[a] || a).localeCompare(CATEGORY_LABELS[b] || b, 'zh-Hant'))
+    .map(value => ({ value, label: CATEGORY_LABELS[value] || value }));
+  const category = setSelectOptions($('main-play-category'), categoryEntries, form.mainPlay.category);
+  const categoryCandidates = candidates.filter(candidate => candidate.item.category === category);
+
+  if (mode === 'category') {
+    $('main-play-hint').textContent = category
+      ? `只會從「${CATEGORY_LABELS[category] || category}」中目前可達的 ${new Set(categoryCandidates.map(candidate => candidate.item.id)).size} 個主軸玩法選擇。`
+      : '目前設定沒有可用的 Main Play 類型。';
+    return;
+  }
+
+  const byItem = new Map();
+  for (const candidate of categoryCandidates) if (!byItem.has(candidate.item.id)) byItem.set(candidate.item.id, candidate.item);
+  const itemEntries = [...byItem.values()]
+    .sort((a, b) => itemDisplayName(a).localeCompare(itemDisplayName(b), 'zh-Hant'))
+    .map(item => ({ value: item.id, label: itemDisplayName(item) }));
+  const itemId = setSelectOptions($('main-play-item'), itemEntries, form.mainPlay.itemId);
+  const exactCandidates = categoryCandidates.filter(candidate => candidate.item.id === itemId);
+  const directionEntries = exactCandidates.map(candidate => ({
+    value: candidate.directionKey,
+    label: candidate.direction
+      ? `${form.characters.find(character => character.id === candidate.direction.actorId)?.displayName || candidate.direction.actorId} → ${form.characters.find(character => character.id === candidate.direction.receiverId)?.displayName || candidate.direction.receiverId}`
+      : `${form.characters[0].displayName} → ${form.characters[1].displayName}`
+  }));
+  const uniqueDirections = [...new Map(directionEntries.map(entry => [entry.value, entry])).values()];
+  setSelectOptions($('main-play-direction'), uniqueDirections, form.mainPlay.directionKey);
+  directionField.hidden = uniqueDirections.length <= 1;
+  $('main-play-hint').textContent = itemId
+    ? `已固定 Main Play「${itemDisplayName(byItem.get(itemId))}」；隨機種子只決定階段位置與其他配套內容。`
+    : '目前類型下沒有可用的具體 Main Play。';
+}
 
 function render({ scroll = false } = {}) {
   const status = $('status');
@@ -206,6 +336,11 @@ function handlePrivacyChange() {
   const previousDefault = PRIVACY_DEFAULT_LOCATIONS[previousPrivacy];
   if (!currentLocation || currentLocation === previousDefault || Object.values(PRIVACY_DEFAULT_LOCATIONS).includes(currentLocation)) $('location').value = PRIVACY_DEFAULT_LOCATIONS[currentPrivacy];
   $('privacy').dataset.previousPrivacy = currentPrivacy;
+  refreshMainPlayPicker();
+  updateFormFeedback();
+}
+function handleGenerationDependencyChange() {
+  refreshMainPlayPicker();
   updateFormFeedback();
 }
 function fallbackCopy(text) {
@@ -227,6 +362,7 @@ async function copyText(text, successMessage) {
 async function copyPrompt() { await copyText($('prompt').textContent || '', 'Prompt 已複製'); }
 async function copyProjectInstructions() { await copyText(PROJECT_INSTRUCTIONS_V01, 'Project 固定指示已複製'); }
 
+installMainPlayPickerUi();
 const debugMode = new URLSearchParams(globalThis.location?.search ?? '').get('debug') === '1';
 if (debugMode && $('developer-tools')) $('developer-tools').style.display = 'block';
 $('privacy').dataset.previousPrivacy = $('privacy').value;
@@ -243,12 +379,21 @@ if (validation.errors.length > 0) {
   $('privacy').addEventListener('change', handlePrivacyChange);
   $('location').addEventListener('input', updateFormFeedback);
   $('prompt-mode')?.addEventListener('change', () => render());
-  for (const input of document.querySelectorAll('#a-anatomy input, #b-anatomy input')) input.addEventListener('change', updateFormFeedback);
+  $('main-play-mode')?.addEventListener('change', () => { refreshMainPlayPicker(); updateFormFeedback(); });
+  $('main-play-category')?.addEventListener('change', () => { refreshMainPlayPicker(); updateFormFeedback(); });
+  $('main-play-item')?.addEventListener('change', () => { refreshMainPlayPicker(); updateFormFeedback(); });
+  $('main-play-direction')?.addEventListener('change', updateFormFeedback);
+  for (const input of document.querySelectorAll('#a-anatomy input, #b-anatomy input, #a-equipment input, #b-equipment input, #scene-props input')) input.addEventListener('change', handleGenerationDependencyChange);
+  $('binding').addEventListener('change', handleGenerationDependencyChange);
+  $('intensity').addEventListener('change', handleGenerationDependencyChange);
+  $('seed').addEventListener('input', handleGenerationDependencyChange);
+  $('other-props').addEventListener('input', handleGenerationDependencyChange);
   for (const button of document.querySelectorAll('[data-anatomy-preset]')) button.addEventListener('click', () => applyAnatomyPreset(button.dataset.anatomyTarget, button.dataset.anatomyPreset));
-  $('random-seed').addEventListener('click', () => { $('seed').value = makeSeed(); render({ scroll: true }); });
+  $('random-seed').addEventListener('click', () => { $('seed').value = makeSeed(); refreshMainPlayPicker(); render({ scroll: true }); });
   $('copy-prompt').addEventListener('click', copyPrompt);
   $('copy-project-instructions')?.addEventListener('click', copyProjectInstructions);
   $('schema').textContent = JSON.stringify(validation, null, 2);
+  refreshMainPlayPicker();
   updateFormFeedback();
   render();
 }
