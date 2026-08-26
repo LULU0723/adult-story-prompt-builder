@@ -9,9 +9,9 @@ const DEFAULT_STORY_CONFIG = Object.freeze({
 });
 
 const LENGTH_TEXT = Object.freeze({
-  ultra_short: '極短篇。約 6–12 個自然段或對話回合，快速完成一個明確情境。',
-  short: '短篇。控制在約 12–30 個自然段或對話回合，避免拉長背景與收尾。',
-  medium: '中篇。可有較完整的情緒與行動推進，但仍以當前情境為核心，不擴張成長篇支線。'
+  ultra_short: '極短篇。約 500–900 個中文字，只寫一個完整的互動段落或短場景。',
+  short: '短篇。約 700–1300 個中文字，集中完成當前情境，不拉長背景與收尾。',
+  medium: '中篇。約 1000–1800 個中文字，可有較完整的情緒與行動推進，但仍以當前情境為核心。'
 });
 
 const OPENING_TEXT = Object.freeze({
@@ -126,7 +126,7 @@ function stageLines(generation, byId) {
     lines.push(`【${STAGE_LABELS[stage]}階段】`);
     for (const beat of beats) {
       if (beat.kind === 'main') {
-        lines.push('- 主軸事件：在此階段執行上方主軸；不要重複成兩個不同事件。');
+        lines.push(`- 核心事件：${beat.text}`);
         continue;
       }
       const prefix = beat.forcedItemId ? '必要鋪墊' : '互動節點';
@@ -174,9 +174,8 @@ export function compileStoryPrompt({ generation, characters, sceneConfig = {}, s
   lines.push('');
   lines.push('【主軸】');
   if (anchor) {
-    lines.push(`主軸事件：${anchor.label}（第 ${anchor.stage} 階段）`);
-    lines.push(anchor.text);
-    lines.push('主軸事件是這一段故事最重要的互動核心；前後內容應該鋪墊、強化或回應它，而不是被其他節點搶走主題。');
+    lines.push(`本篇核心：${anchor.label}（第 ${anchor.stage} 階段）`);
+    lines.push('這是本篇最重要的互動核心；前後內容應該鋪墊、強化或回應它，而不是被其他節點搶走主題。具體行動只在對應階段執行。');
   } else {
     lines.push('沒有可用的主軸事件；不要自行捏造新的核心玩法。');
   }
@@ -189,6 +188,7 @@ export function compileStoryPrompt({ generation, characters, sceneConfig = {}, s
   lines.push('【一致性要求】');
   lines.push('- 保持角色身體設定、道具所有權、角色方向與行動限制前後一致。');
   lines.push('- 不要替角色新增未提供的身體條件或道具，也不要把其中一人的身體條件錯算到另一人。');
+  lines.push('- 性別代稱與第二人稱用語應依角色的「性別設定」保持一致，不得由身體設定、攜帶道具或外在呈現反推性別；非二元或不指定時也不要自行推定。');
   lines.push('- 若節點包含角色方向，執行時要維持指定的主動方與接受方；雙方互動節點則不要硬改寫成單方面支配。');
   lines.push('- 玩法強度代表允許的上限，不是每一段都必須寫到最高強度。');
   lines.push('- 文字直接度只控制措辭，不應改變可選玩法或身體設定。');
