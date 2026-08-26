@@ -253,11 +253,15 @@ function fallbackCopy(text) {
   textarea.style.opacity = '0';
   textarea.style.pointerEvents = 'none';
   document.body.appendChild(textarea);
-  textarea.select();
-  textarea.setSelectionRange(0, textarea.value.length);
-  const ok = document.execCommand?.('copy') === true;
-  textarea.remove();
-  return ok;
+  try {
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    return document.execCommand?.('copy') === true;
+  } catch {
+    return false;
+  } finally {
+    textarea.remove();
+  }
 }
 
 async function copyPrompt() {
