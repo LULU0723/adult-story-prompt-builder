@@ -9,6 +9,11 @@ const items = await fetch('./data/adult-items.json').then(r => r.json());
 const validation = validateDataset(items);
 
 const $ = id => document.querySelector(`#${id}`);
+const PRIVACY_DEFAULT_LOCATIONS = Object.freeze({
+  private: 'bedroom',
+  semi: 'semi_private_space',
+  public: 'public_space'
+});
 
 function checkedValues(containerId) {
   return [...document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`)].map(input => input.value);
@@ -37,7 +42,7 @@ export function readProductForm() {
   const characters = [readCharacter('a', '角色A'), readCharacter('b', '角色B')];
   const privacy = $('privacy').value;
   const sceneConfig = {
-    location: $('location').value.trim() || (privacy === 'private' ? 'bedroom' : privacy === 'semi' ? 'semi_private_space' : 'public_space'),
+    location: $('location').value.trim() || PRIVACY_DEFAULT_LOCATIONS[privacy],
     privacy,
     props: csvValues($('props').value)
   };
@@ -98,7 +103,7 @@ export function generateFromForm(form) {
   const anchorResult = chooseAnchor(items, ctx);
   if (!anchorResult.chosen) {
     return {
-      error: '目前設定找不到可達的 Main Anchor。可嘗試提高玩法強度、調整 anatomy / equipment、privacy，或更換 Seed。',
+      error: '目前設定找不到可達的主軸事件。可嘗試提高玩法強度、調整身體設定／道具、隱私程度，或更換隨機種子。',
       anchorResult
     };
   }
@@ -116,22 +121,52 @@ export function generateFromForm(form) {
   };
 }
 
+function validateProductForm(form) {
+  const errors = [];
+  for (const character of form.characters) {
+    if (!character.anatomy.length) errors.push(`${character.displayName} 尚未勾選任何身體設定。請至少選擇一項後再生成。`);
+  }
+  return errors;
+}
+
+function sceneWarning(form) {
+  const privacy = form.sceneConfig.privacy;
+  const location = form.sceneConfig.location.trim().toLowerCase();
+  const obviousPrivate = ['bedroom', 'private_room', '臥室', '私人房間'].includes(location);
+  const obviousPublic = ['public_space', 'street', 'park', '公開場所', '街道', '公園'].includes(location);
+  if (privacy === 'public' && obviousPrivate) return '提醒：目前設定為「公開」，但地點看起來較私密。若是刻意設定可以保留；否則請調整其中一項。';
+  if (privacy === 'private' && obviousPublic) return '提醒：目前設定為「私密」，但地點看起來較公開。若是刻意設定可以保留；否則請調整其中一項。';
+  return '';
+}
+
 function render() {
   const status = $('status');
   try {
-    status.textContent = 'Generating…';
+    status.textContent = '生成中…';
     const form = readProductForm();
+    const formErrors = validateProductForm(form);
+    $('scene-warning').textContent = sceneWarning(form);
+    $('form-warning').textContent = formErrors.join(' ');
+
+    if (formErrors.length) {
+      $('prompt').textContent = '請先完成上方必要設定。';
+      $('prompt').classList.add('error');
+      $('result').textContent = JSON.stringify({ form, validationErrors: formErrors }, null, 2);
+      status.textContent = '需要補充設定';
+      return;
+    }
+
     const result = generateFromForm(form);
     $('schema').textContent = JSON.stringify(validation, null, 2);
     $('result').textContent = JSON.stringify({ form, ...result }, null, 2);
     $('prompt').textContent = result.prompt ?? result.error;
     $('prompt').classList.toggle('error', Boolean(result.error));
-    status.textContent = result.error ? 'No reachable anchor' : 'Generated';
+    status.textContent = result.error ? '找不到可用主軸' : '已生成';
   } catch (error) {
-    $('prompt').textContent = `Generation failed: ${String(error?.message ?? error)}`;
+    $('prompt').textContent = `生成失敗：${String(error?.message ?? error)}`;
     $('prompt').classList.add('error');
     $('result').textContent = String(error?.stack ?? error);
-    status.textContent = 'Error';
+    status.textContent = '發生錯誤';
   }
 }
 
@@ -144,26 +179,46 @@ function makeSeed() {
   return `seed-${Date.now().toString(36)}`;
 }
 
+function handlePrivacyChange() {
+  const previousPrivacy = $('privacy').dataset.previousPrivacy || 'private';
+  const currentPrivacy = $('privacy').value;
+  const currentLocation = $('location').value.trim();
+  const previousDefault = PRIVACY_DEFAULT_LOCATIONS[previousPrivacy];
+  if (!currentLocation || currentLocation === previousDefault || Object.values(PRIVACY_DEFAULT_LOCATIONS).includes(currentLocation)) {
+    $('location').value = PRIVACY_DEFAULT_LOCATIONS[currentPrivacy];
+  }
+  $('privacy').dataset.previousPrivacy = currentPrivacy;
+  $('scene-warning').textContent = sceneWarning(readProductForm());
+}
+
+const debugMode = new URLSearchParams(globalThis.location?.search ?? '').get('debug') === '1';
+if (debugMode && $('developer-tools')) $('developer-tools').style.display = 'block';
+$('privacy').dataset.previousPrivacy = $('privacy').value;
+
 if (validation.errors.length > 0) {
   $('schema').textContent = JSON.stringify(validation, null, 2);
   $('result').textContent = 'Dataset validation failed. Generation stopped.';
-  $('prompt').textContent = 'Fix schema errors before running the engine.';
+  $('prompt').textContent = '資料驗證失敗，請先修正資料錯誤。';
   $('prompt').classList.add('error');
   $('generate').disabled = true;
-  $('status').textContent = 'Dataset invalid';
+  $('status').textContent = '資料無效';
 } else {
   $('generate').addEventListener('click', render);
+  $('privacy').addEventListener('change', handlePrivacyChange);
+  $('location').addEventListener('input', () => {
+    $('scene-warning').textContent = sceneWarning(readProductForm());
+  });
   $('random-seed').addEventListener('click', () => {
     $('seed').value = makeSeed();
-    $('status').textContent = 'Seed changed';
+    render();
   });
   $('copy-prompt').addEventListener('click', async () => {
     const text = $('prompt').textContent || '';
     try {
       await navigator.clipboard.writeText(text);
-      $('status').textContent = 'Prompt copied';
+      $('status').textContent = 'Prompt 已複製';
     } catch {
-      $('status').textContent = 'Copy failed — select the prompt manually';
+      $('status').textContent = '複製失敗，請手動選取 Prompt';
     }
   });
   $('schema').textContent = JSON.stringify(validation, null, 2);
