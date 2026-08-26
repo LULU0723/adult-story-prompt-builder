@@ -38,12 +38,15 @@ export function runCompilerSmokeTests() {
 
   const projectPrompt = compileProjectPrompt(input);
   assert(projectPrompt.startsWith('【本次故事規格】'), 'Project Prompt header missing', failures);
+  assert(projectPrompt.includes('規格版本：v1'), 'Project Prompt version marker missing', failures);
+  assert(projectPrompt.includes('所有角色皆為成年人。'), 'Project Prompt adult declaration missing', failures);
   assert(projectPrompt.includes('【角色設定】') && projectPrompt.includes('【場景】') && projectPrompt.includes('【敘事控制】') && projectPrompt.includes('【主軸】') && projectPrompt.includes('【互動節點】'), 'Project Prompt dynamic sections missing', failures);
   assert(projectPrompt.includes('甲 先靠近 乙。') && projectPrompt.includes('甲 將主軸事件落在 乙 身上。'), 'Project Prompt lost generated beats', failures);
   assert(projectPrompt.includes('不得由身體設定、攜帶道具或外在呈現反推性別'), 'Project Prompt must keep per-run gender guard', failures);
   assert(!projectPrompt.includes('【任務】') && !projectPrompt.includes('【輸出方式】'), 'Project Prompt should omit fixed standalone sections', failures);
   assert(projectPrompt.length < prompt.length, 'Project Prompt should be shorter than Standalone Prompt', failures);
   assert(PROJECT_INSTRUCTIONS_V01.includes('必要鋪墊必須先成立') && PROJECT_INSTRUCTIONS_V01.includes('活動能力已受限制') && PROJECT_INSTRUCTIONS_V01.includes('3 個簡短、彼此有明顯差異的後續發展方向'), 'Project fixed instructions contract incomplete', failures);
+  assert(PROJECT_INSTRUCTIONS_V01.includes('目前支援的故事規格版本為 v1') && PROJECT_INSTRUCTIONS_V01.includes('規格版本'), 'Project fixed instructions version contract missing', failures);
 
   const custom = compileStoryPrompt({ generation, characters, sceneConfig:{privacy:'semi'}, storyConfig:{length:'ultra_short',pace:'slow_burn',lexicalDirectness:'direct',descriptionFocus:'dialogue',adultContentShare:'high'} });
   assert(custom.includes('極短篇') && custom.includes('約 500–900 個中文字') && custom.includes('慢熱') && custom.includes('直接明確的成人用語') && custom.includes('優先描寫對話') && custom.includes('成人互動是主要篇幅'), 'custom story controls not applied', failures);
@@ -69,8 +72,8 @@ export function runCompilerSmokeTests() {
     { stage:3, kind:'main', direction:{actorId:'A',receiverId:'B'}, item:{id:'penis_penetrative_contact',label:'OLD_PENIS_LABEL',promptTemplate:'{actor} penis penetrator provider receptacle {receiver}。'} }
   ] };
   const penetrativePrompt = compileStoryPrompt({generation:penetrativeGeneration,characters});
-  assert(penetrativePrompt.includes('手部插入互動') && penetrativePrompt.includes('以手部進行插入式的親密互動'), 'manual penetrative narrative copy missing', failures);
-  assert(penetrativePrompt.includes('穿戴式道具插入互動') && penetrativePrompt.includes('使用自己攜帶的穿戴式道具'), 'toy penetrative narrative copy missing', failures);
+  assert(penetrativePrompt.includes('以手部進行插入式的親密互動'), 'manual penetrative narrative copy missing', failures);
+  assert(penetrativePrompt.includes('使用自己攜帶的穿戴式道具'), 'toy penetrative narrative copy missing', failures);
   assert(penetrativePrompt.includes('本篇核心：陰莖插入互動（第 3 階段）') && penetrativePrompt.includes('使用自己的陰莖'), 'penis penetrative narrative copy missing', failures);
   assert(!penetrativePrompt.includes('OLD_MANUAL_LABEL') && !penetrativePrompt.includes('OLD_TOY_LABEL') && !penetrativePrompt.includes('OLD_PENIS_LABEL'), 'legacy penetrative labels leaked', failures);
   assert(!penetrativePrompt.includes('generic manual penetrator') && !penetrativePrompt.includes('owner provider') && !penetrativePrompt.includes('receptacle'), 'engine/spec penetrative wording leaked into compiled prompt', failures);
