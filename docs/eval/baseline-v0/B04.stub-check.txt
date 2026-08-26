@@ -1,1 +1,0 @@
-Baseline v0 documentation branch integrity marker. Safe to delete after merge.
