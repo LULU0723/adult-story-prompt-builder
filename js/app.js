@@ -10,9 +10,9 @@ const validation = validateDataset(items);
 
 const $ = id => document.querySelector(`#${id}`);
 const PRIVACY_DEFAULT_LOCATIONS = Object.freeze({
-  private: 'bedroom',
-  semi: 'semi_private_space',
-  public: 'public_space'
+  private: '臥室',
+  semi: '半公開空間',
+  public: '公開場所'
 });
 const SCENE_PROP_ALIASES = Object.freeze({
   mirror: 'mirror',
