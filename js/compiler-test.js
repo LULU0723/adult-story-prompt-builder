@@ -1,5 +1,6 @@
-import { compileStoryPrompt } from './compiler-v01.js';
+import { compileProjectPrompt, compileStoryPrompt } from './compiler-v01.js';
 import { ITEM_COPY_V01 } from './item-copy-v01.js';
+import { PROJECT_INSTRUCTIONS_V01 } from './project-instructions-v01.js';
 
 const characters = [
   { id:'A', displayName:'甲', adult:true, gender:'female', presentation:'androgynous', anatomy:['vagina','mouth','hands'], equipment:[], traits:{dominance:'high'} },
@@ -19,7 +20,8 @@ function assert(condition, message, failures) { if (!condition) failures.push(me
 
 export function runCompilerSmokeTests() {
   const failures = [];
-  const prompt = compileStoryPrompt({ generation, characters, sceneConfig:{location:'bedroom',privacy:'private',props:['mirror']} });
+  const input = { generation, characters, sceneConfig:{location:'bedroom',privacy:'private',props:['mirror']} };
+  const prompt = compileStoryPrompt(input);
 
   assert(prompt.includes('【任務】') && prompt.includes('【角色設定】') && prompt.includes('【敘事控制】') && prompt.includes('【主軸】') && prompt.includes('【互動節點】'), 'required compiler sections missing', failures);
   assert(prompt.includes('甲 先靠近 乙。'), 'actor/receiver placeholders were not rendered', failures);
@@ -34,24 +36,28 @@ export function runCompilerSmokeTests() {
   assert(prompt.includes('不得由身體設定、攜帶道具或外在呈現反推性別'), 'gender-pronoun consistency guard missing', failures);
   assert(prompt.includes('身體設定：陰道、口部、雙手'), 'character physical constraints missing or not localized', failures);
 
+  const projectPrompt = compileProjectPrompt(input);
+  assert(projectPrompt.startsWith('【本次故事規格】'), 'Project Prompt header missing', failures);
+  assert(projectPrompt.includes('【角色設定】') && projectPrompt.includes('【場景】') && projectPrompt.includes('【敘事控制】') && projectPrompt.includes('【主軸】') && projectPrompt.includes('【互動節點】'), 'Project Prompt dynamic sections missing', failures);
+  assert(projectPrompt.includes('甲 先靠近 乙。') && projectPrompt.includes('甲 將主軸事件落在 乙 身上。'), 'Project Prompt lost generated beats', failures);
+  assert(projectPrompt.includes('不得由身體設定、攜帶道具或外在呈現反推性別'), 'Project Prompt must keep per-run gender guard', failures);
+  assert(!projectPrompt.includes('【任務】') && !projectPrompt.includes('【輸出方式】'), 'Project Prompt should omit fixed standalone sections', failures);
+  assert(projectPrompt.length < prompt.length, 'Project Prompt should be shorter than Standalone Prompt', failures);
+  assert(PROJECT_INSTRUCTIONS_V01.includes('必要鋪墊必須先成立') && PROJECT_INSTRUCTIONS_V01.includes('活動能力已受限制') && PROJECT_INSTRUCTIONS_V01.includes('3 個簡短、彼此有明顯差異的後續發展方向'), 'Project fixed instructions contract incomplete', failures);
+
   const custom = compileStoryPrompt({ generation, characters, sceneConfig:{privacy:'semi'}, storyConfig:{length:'ultra_short',pace:'slow_burn',lexicalDirectness:'direct',descriptionFocus:'dialogue',adultContentShare:'high'} });
   assert(custom.includes('極短篇') && custom.includes('約 500–900 個中文字') && custom.includes('慢熱') && custom.includes('直接明確的成人用語') && custom.includes('優先描寫對話') && custom.includes('成人互動是主要篇幅'), 'custom story controls not applied', failures);
-
   const medium = compileStoryPrompt({ generation, characters, storyConfig:{length:'medium'} });
   assert(medium.includes('約 1000–1800 個中文字'), 'medium length calibration missing', failures);
 
-  const restraintGeneration = { results: [
-    { stage:2, kind:'main', direction:{actorId:'A',receiverId:'B'}, item:{id:'light_restraint',label:'舊標籤不應優先',promptTemplate:'{actor} OLD_SPEC {receiver}。'} }
-  ] };
+  const restraintGeneration = { results: [{ stage:2, kind:'main', direction:{actorId:'A',receiverId:'B'}, item:{id:'light_restraint',label:'舊標籤不應優先',promptTemplate:'{actor} OLD_SPEC {receiver}。'} }] };
   const restraintPrompt = compileStoryPrompt({generation:restraintGeneration,characters});
   assert(restraintPrompt.includes('本篇核心：輕度行動限制（第 2 階段）'), 'item-copy displayName should override legacy label', failures);
   assert(restraintPrompt.includes('甲 以明確但仍保留部分活動空間的方式限制 乙 的動作'), 'restraint narrativeDirection should be used', failures);
   assert(restraintPrompt.includes('持續把這個受限狀態寫進姿勢、反應與可採取的動作裡'), 'restraint preservation wording missing', failures);
   assert(!restraintPrompt.includes('OLD_SPEC'), 'legacy promptTemplate leaked despite item-copy override', failures);
 
-  const fullRestraintGeneration = { results: [
-    { stage:3, kind:'main', direction:{actorId:'A',receiverId:'B'}, item:{id:'full_restraint',label:'舊高度限制',promptTemplate:'{actor} OLD_FULL {receiver}。'} }
-  ] };
+  const fullRestraintGeneration = { results: [{ stage:3, kind:'main', direction:{actorId:'A',receiverId:'B'}, item:{id:'full_restraint',label:'舊高度限制',promptTemplate:'{actor} OLD_FULL {receiver}。'} }] };
   const fullRestraintPrompt = compileStoryPrompt({generation:fullRestraintGeneration,characters});
   assert(fullRestraintPrompt.includes('本篇核心：高度行動限制（第 3 階段）'), 'full-restraint displayName missing', failures);
   assert(fullRestraintPrompt.includes('幾乎無法自行改變姿勢'), 'full-restraint narrativeDirection missing', failures);
@@ -82,7 +88,6 @@ export function runCompilerSmokeTests() {
 
   const noAnchor = compileStoryPrompt({generation:{results:[]},characters});
   assert(noAnchor.includes('沒有可用的主軸事件；不要自行捏造新的核心玩法。'), 'missing-anchor guard text missing', failures);
-
   const anchorErrorGeneration = { results: [
     { stage:1, kind:'accent', direction:{actorId:'A',receiverId:'B'}, item:{id:'intro',label:'起始互動',promptTemplate:'{actor} 先靠近 {receiver}。'} },
     { stage:3, kind:'anchor-error', direction:{actorId:'A',receiverId:'B'}, item:{id:'failed-anchor',label:'失敗主軸',promptTemplate:'{actor} 執行不應輸出的失敗主軸。'} }
@@ -91,13 +96,8 @@ export function runCompilerSmokeTests() {
   assert(anchorErrorPrompt.includes('沒有可用的主軸事件'), 'anchor-error path should report no usable anchor', failures);
   assert(!anchorErrorPrompt.includes('不應輸出的失敗主軸'), 'anchor-error item leaked into interaction beats', failures);
 
-  return { passed: failures.length === 0, failures, samplePrompt: prompt };
+  return { passed: failures.length === 0, failures, samplePrompt: prompt, sampleProjectPrompt: projectPrompt };
 }
 
 const button = document.querySelector('#run-compiler-tests');
-if (button) {
-  button.addEventListener('click', () => {
-    const output = document.querySelector('#compiler-test-output');
-    output.textContent = JSON.stringify(runCompilerSmokeTests(), null, 2);
-  });
-}
+if (button) button.addEventListener('click', () => { document.querySelector('#compiler-test-output').textContent = JSON.stringify(runCompilerSmokeTests(), null, 2); });
