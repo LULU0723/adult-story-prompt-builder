@@ -18,9 +18,22 @@ const SCENE_PROP_ALIASES = Object.freeze({
   mirror: 'mirror',
   '鏡子': 'mirror'
 });
+const ANATOMY_PRESETS = Object.freeze({
+  'typical-female': ['vagina', 'breasts', 'anus', 'mouth', 'hands'],
+  'typical-male': ['penis', 'anus', 'mouth', 'hands'],
+  common: ['anus', 'mouth', 'hands'],
+  clear: []
+});
 
 function checkedValues(containerId) {
   return [...document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`)].map(input => input.value);
+}
+
+function setCheckedValues(containerId, values) {
+  const selected = new Set(values);
+  for (const input of document.querySelectorAll(`#${containerId} input[type="checkbox"]`)) {
+    input.checked = selected.has(input.value);
+  }
 }
 
 function csvValues(value) {
@@ -29,6 +42,10 @@ function csvValues(value) {
 
 function scenePropValues(value) {
   return csvValues(value).map(part => SCENE_PROP_ALIASES[part.toLowerCase()] || SCENE_PROP_ALIASES[part] || part);
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function readCharacter(prefix, fallbackName) {
@@ -52,7 +69,10 @@ export function readProductForm() {
   const sceneConfig = {
     location: $('location').value.trim() || PRIVACY_DEFAULT_LOCATIONS[privacy],
     privacy,
-    props: scenePropValues($('props').value)
+    props: uniqueValues([
+      ...checkedValues('scene-props'),
+      ...scenePropValues($('other-props').value)
+    ])
   };
   const storyConfig = {
     length: $('length').value,
@@ -147,6 +167,20 @@ function sceneWarning(form) {
   return '';
 }
 
+function updateFormFeedback() {
+  const form = readProductForm();
+  $('scene-warning').textContent = sceneWarning(form);
+  $('form-warning').textContent = validateProductForm(form).join(' ');
+}
+
+function applyAnatomyPreset(target, presetName) {
+  const values = ANATOMY_PRESETS[presetName];
+  if (!values) return;
+  setCheckedValues(`${target}-anatomy`, values);
+  updateFormFeedback();
+  $('status').textContent = presetName === 'clear' ? '身體設定已清空' : '已套用身體設定，可再自行調整';
+}
+
 function isCompactLayout() {
   return globalThis.matchMedia?.('(max-width: 980px)').matches ?? false;
 }
@@ -208,7 +242,7 @@ function handlePrivacyChange() {
     $('location').value = PRIVACY_DEFAULT_LOCATIONS[currentPrivacy];
   }
   $('privacy').dataset.previousPrivacy = currentPrivacy;
-  $('scene-warning').textContent = sceneWarning(readProductForm());
+  updateFormFeedback();
 }
 
 function fallbackCopy(text) {
@@ -256,14 +290,19 @@ if (validation.errors.length > 0) {
 } else {
   $('generate').addEventListener('click', () => render({ scroll: true }));
   $('privacy').addEventListener('change', handlePrivacyChange);
-  $('location').addEventListener('input', () => {
-    $('scene-warning').textContent = sceneWarning(readProductForm());
-  });
+  $('location').addEventListener('input', updateFormFeedback);
+  for (const input of document.querySelectorAll('#a-anatomy input, #b-anatomy input')) {
+    input.addEventListener('change', updateFormFeedback);
+  }
+  for (const button of document.querySelectorAll('[data-anatomy-preset]')) {
+    button.addEventListener('click', () => applyAnatomyPreset(button.dataset.anatomyTarget, button.dataset.anatomyPreset));
+  }
   $('random-seed').addEventListener('click', () => {
     $('seed').value = makeSeed();
     render({ scroll: true });
   });
   $('copy-prompt').addEventListener('click', copyPrompt);
   $('schema').textContent = JSON.stringify(validation, null, 2);
+  updateFormFeedback();
   render();
 }
