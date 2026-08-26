@@ -1,0 +1,11 @@
+{
+  "name": "成人故事 Prompt Builder",
+  "short_name": "Prompt Builder",
+  "description": "在瀏覽器本機產生成人虛構故事 Prompt 的靜態工具。",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d0f12",
+  "theme_color": "#0d0f12"
+}
