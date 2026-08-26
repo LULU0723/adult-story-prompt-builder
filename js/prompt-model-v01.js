@@ -50,6 +50,22 @@ const FOCUS_TEXT = Object.freeze({
   physical: '優先描寫動作連續性、位置關係與身體反應，確保空間邏輯清楚。'
 });
 
+const PROJECT_LENGTH_TEXT = Object.freeze({
+  ultra_short: '極短篇｜500–900 字',
+  short: '短篇｜700–1300 字',
+  medium: '中篇｜1000–1800 字'
+});
+const PROJECT_OPENING_TEXT = Object.freeze({ direct:'直接切入', situational:'短場景切入' });
+const PROJECT_PACE_TEXT = Object.freeze({
+  direct:'直接', quick_escalation:'快速升溫', gradual:'漸進', slow_burn:'慢熱', wave:'波浪式'
+});
+const PROJECT_STYLE_TEXT = Object.freeze({
+  character_driven:'角色驅動', dialogue_heavy:'對話為主', sensory:'感官描寫', concise:'精簡俐落'
+});
+const PROJECT_DIRECTNESS_TEXT = Object.freeze({ subtle:'含蓄', balanced:'平衡', direct:'直接', very_direct:'高度直接' });
+const PROJECT_ADULT_SHARE_TEXT = Object.freeze({ low:'低', medium:'中', high:'高' });
+const PROJECT_FOCUS_TEXT = Object.freeze({ interaction:'互動', dialogue:'對話', emotion:'情緒', physical:'身體與空間' });
+
 const STAGE_LABELS = Object.freeze({ 1: '起始', 2: '推進', 3: '深化' });
 const GENDER_TEXT = Object.freeze({ female:'女性', male:'男性', nonbinary:'非二元', unspecified:'不指定' });
 const PRESENTATION_TEXT = Object.freeze({ feminine:'女性化', masculine:'男性化', androgynous:'中性', unspecified:'不指定' });
@@ -128,7 +144,14 @@ function buildStages(generation, byId) {
 function findMainAnchor(generation, byId) {
   const main = (generation?.results ?? []).find(step => step.kind === 'main' && step.item);
   if (!main) return null;
-  return { id: main.item.id, label: itemDisplayName(main.item), stage: main.stage, text: renderTemplate(main, byId) };
+  const actorId = main.direction?.actorId;
+  const receiverId = main.direction?.receiverId;
+  const direction = main.item?.roleShape === 'mutual'
+    ? '雙向'
+    : actorId && receiverId
+      ? `${displayName(byId[actorId], actorId)} → ${displayName(byId[receiverId], receiverId)}`
+      : null;
+  return { id: main.item.id, label: itemDisplayName(main.item), stage: main.stage, direction, text: renderTemplate(main, byId) };
 }
 
 export function normalizeStoryConfig(input = {}) { return { ...DEFAULT_STORY_CONFIG, ...(input || {}) }; }
@@ -148,6 +171,15 @@ export function buildPromptModel({ generation, characters, sceneConfig = {}, sto
       `- 文字直接度：${readConfig(DIRECTNESS_TEXT, config.lexicalDirectness, 'balanced')}`,
       `- 成人內容占比：${readConfig(ADULT_SHARE_TEXT, config.adultContentShare, 'medium')}`,
       `- 描寫焦點：${readConfig(FOCUS_TEXT, config.descriptionFocus, 'interaction')}`
+    ],
+    projectControls: [
+      `- 篇幅：${readConfig(PROJECT_LENGTH_TEXT, config.length, 'short')}`,
+      `- 開場：${readConfig(PROJECT_OPENING_TEXT, config.opening, 'direct')}`,
+      `- 節奏：${readConfig(PROJECT_PACE_TEXT, config.pace, 'quick_escalation')}`,
+      `- 文風：${readConfig(PROJECT_STYLE_TEXT, config.writingStyle, 'character_driven')}`,
+      `- 文字直接度：${readConfig(PROJECT_DIRECTNESS_TEXT, config.lexicalDirectness, 'balanced')}`,
+      `- 成人內容比重：${readConfig(PROJECT_ADULT_SHARE_TEXT, config.adultContentShare, 'medium')}`,
+      `- 描寫重點：${readConfig(PROJECT_FOCUS_TEXT, config.descriptionFocus, 'interaction')}`
     ],
     anchor: findMainAnchor(generation, byId),
     stages: buildStages(generation, byId)
@@ -179,6 +211,21 @@ function pushDynamicSections(lines, model) {
   }
   for (const stage of model.stages) {
     lines.push(`【${stage.label}階段】`);
+    for (const beat of stage.beats) {
+      if (beat.kind === 'main') lines.push(`- 核心事件：${beat.text}`);
+      else lines.push(`- ${beat.forced ? '必要鋪墊' : '互動節點'}：${beat.text}`);
+    }
+  }
+}
+
+function pushProjectStages(lines, model) {
+  lines.push('【階段】');
+  if (!model.stages.length) {
+    lines.push('- 無可用節點');
+    return;
+  }
+  for (const stage of model.stages) {
+    lines.push(`${stage.stage}. ${stage.label}`);
     for (const beat of stage.beats) {
       if (beat.kind === 'main') lines.push(`- 核心事件：${beat.text}`);
       else lines.push(`- ${beat.forced ? '必要鋪墊' : '互動節點'}：${beat.text}`);
@@ -223,13 +270,26 @@ export function renderProjectPrompt(model) {
   lines.push('【本次故事規格】');
   lines.push(`規格版本：${PROJECT_SPEC_VERSION}`);
   lines.push('所有角色皆為成年人。');
-  lines.push('以下內容是本次故事的動態設定；請套用專案既有的固定寫作規則。');
   lines.push('');
-  pushDynamicSections(lines, model);
+  lines.push('【角色】');
+  if (model.characters.length) lines.push(...model.characters);
+  else lines.push('- 未提供角色資料');
   lines.push('');
-  lines.push('【本次必要一致性】');
-  lines.push(...PER_RUN_CONSISTENCY);
+  lines.push('【場景】');
+  lines.push(model.scene);
   lines.push('');
-  lines.push('依專案固定規則直接開始正文。');
+  lines.push('【敘事】');
+  lines.push(...(model.projectControls || model.controls));
+  lines.push('');
+  lines.push('【Main Play】');
+  if (model.anchor) {
+    lines.push(`- 主軸：${model.anchor.label}`);
+    if (model.anchor.direction) lines.push(`- 方向：${model.anchor.direction}`);
+    lines.push(`- 核心階段：${model.anchor.stage}`);
+  } else {
+    lines.push('- 主軸：無可用主軸；不要自行新增');
+  }
+  lines.push('');
+  pushProjectStages(lines, model);
   return lines.join('\n');
 }
