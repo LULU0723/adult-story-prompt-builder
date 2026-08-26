@@ -147,7 +147,16 @@ function sceneWarning(form) {
   return '';
 }
 
-function render() {
+function isCompactLayout() {
+  return globalThis.matchMedia?.('(max-width: 980px)').matches ?? false;
+}
+
+function scrollToPrompt() {
+  if (!isCompactLayout()) return;
+  $('prompt-preview')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function render({ scroll = false } = {}) {
   const status = $('status');
   try {
     status.textContent = '生成中…';
@@ -161,6 +170,7 @@ function render() {
       $('prompt').classList.add('error');
       $('result').textContent = JSON.stringify({ form, validationErrors: formErrors }, null, 2);
       status.textContent = '需要補充設定';
+      if (scroll) scrollToPrompt();
       return;
     }
 
@@ -170,11 +180,13 @@ function render() {
     $('prompt').textContent = result.prompt ?? result.error;
     $('prompt').classList.toggle('error', Boolean(result.error));
     status.textContent = result.error ? '找不到可用主軸' : '已生成';
+    if (scroll) scrollToPrompt();
   } catch (error) {
     $('prompt').textContent = `生成失敗：${String(error?.message ?? error)}`;
     $('prompt').classList.add('error');
     $('result').textContent = String(error?.stack ?? error);
     status.textContent = '發生錯誤';
+    if (scroll) scrollToPrompt();
   }
 }
 
@@ -199,6 +211,37 @@ function handlePrivacyChange() {
   $('scene-warning').textContent = sceneWarning(readProductForm());
 }
 
+function fallbackCopy(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  textarea.style.pointerEvents = 'none';
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  const ok = document.execCommand?.('copy') === true;
+  textarea.remove();
+  return ok;
+}
+
+async function copyPrompt() {
+  const text = $('prompt').textContent || '';
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+    await navigator.clipboard.writeText(text);
+    $('status').textContent = 'Prompt 已複製';
+    return;
+  } catch {
+    if (fallbackCopy(text)) {
+      $('status').textContent = 'Prompt 已複製';
+      return;
+    }
+    $('status').textContent = '複製失敗，請長按 Prompt 手動複製';
+  }
+}
+
 const debugMode = new URLSearchParams(globalThis.location?.search ?? '').get('debug') === '1';
 if (debugMode && $('developer-tools')) $('developer-tools').style.display = 'block';
 $('privacy').dataset.previousPrivacy = $('privacy').value;
@@ -211,24 +254,16 @@ if (validation.errors.length > 0) {
   $('generate').disabled = true;
   $('status').textContent = '資料無效';
 } else {
-  $('generate').addEventListener('click', render);
+  $('generate').addEventListener('click', () => render({ scroll: true }));
   $('privacy').addEventListener('change', handlePrivacyChange);
   $('location').addEventListener('input', () => {
     $('scene-warning').textContent = sceneWarning(readProductForm());
   });
   $('random-seed').addEventListener('click', () => {
     $('seed').value = makeSeed();
-    render();
+    render({ scroll: true });
   });
-  $('copy-prompt').addEventListener('click', async () => {
-    const text = $('prompt').textContent || '';
-    try {
-      await navigator.clipboard.writeText(text);
-      $('status').textContent = 'Prompt 已複製';
-    } catch {
-      $('status').textContent = '複製失敗，請手動選取 Prompt';
-    }
-  });
+  $('copy-prompt').addEventListener('click', copyPrompt);
   $('schema').textContent = JSON.stringify(validation, null, 2);
   render();
 }
