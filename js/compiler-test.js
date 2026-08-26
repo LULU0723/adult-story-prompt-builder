@@ -39,6 +39,23 @@ export function runCompilerSmokeTests() {
   const medium = compileStoryPrompt({ generation, characters, storyConfig:{length:'medium'} });
   assert(medium.includes('約 1000–1800 個中文字'), 'medium length calibration missing', failures);
 
+  const restraintGeneration = { results: [
+    { stage:2, kind:'main', direction:{actorId:'A',receiverId:'B'}, item:{id:'light_restraint',label:'舊標籤不應優先',promptTemplate:'{actor} OLD_SPEC {receiver}。'} }
+  ] };
+  const restraintPrompt = compileStoryPrompt({generation:restraintGeneration,characters});
+  assert(restraintPrompt.includes('本篇核心：輕度行動限制（第 2 階段）'), 'item-copy displayName should override legacy label', failures);
+  assert(restraintPrompt.includes('甲 以明確但仍保留部分活動空間的方式限制 乙 的動作'), 'restraint narrativeDirection should be used', failures);
+  assert(restraintPrompt.includes('後續持續把這個受限狀態寫進姿勢、反應與可採取的動作裡'), 'restraint preservation wording missing', failures);
+  assert(!restraintPrompt.includes('OLD_SPEC'), 'legacy promptTemplate leaked despite item-copy override', failures);
+
+  const fullRestraintGeneration = { results: [
+    { stage:3, kind:'main', direction:{actorId:'A',receiverId:'B'}, item:{id:'full_restraint',label:'舊高度限制',promptTemplate:'{actor} OLD_FULL {receiver}。'} }
+  ] };
+  const fullRestraintPrompt = compileStoryPrompt({generation:fullRestraintGeneration,characters});
+  assert(fullRestraintPrompt.includes('本篇核心：高度行動限制（第 3 階段）'), 'full-restraint displayName missing', failures);
+  assert(fullRestraintPrompt.includes('幾乎無法自行改變姿勢'), 'full-restraint narrativeDirection missing', failures);
+  assert(!fullRestraintPrompt.includes('OLD_FULL'), 'full-restraint legacy promptTemplate leaked', failures);
+
   const noAnchor = compileStoryPrompt({generation:{results:[]},characters});
   assert(noAnchor.includes('沒有可用的主軸事件；不要自行捏造新的核心玩法。'), 'missing-anchor guard text missing', failures);
 
