@@ -60,6 +60,7 @@ const PRESENTATION_TEXT = Object.freeze({ feminine:'女性化', masculine:'男�
 const ANATOMY_TEXT = Object.freeze({ vagina:'陰道', penis:'陰莖', breasts:'胸部', anus:'肛門', mouth:'口部', hands:'雙手' });
 const EQUIPMENT_TEXT = Object.freeze({ strap_on:'穿戴式道具' });
 const PRIVACY_TEXT = Object.freeze({ private:'私密', semi:'半公開', public:'公開' });
+const SCENE_PROP_TEXT = Object.freeze({ mirror:'鏡子' });
 
 function safeArray(value) { return Array.isArray(value) ? value : []; }
 function normalizeCharacters(characters) {
@@ -105,7 +106,7 @@ function describeScene(sceneConfig = {}) {
   const parts = [];
   if (sceneConfig.location) parts.push(`地點：${sceneConfig.location}`);
   if (sceneConfig.privacy) parts.push(`隱私程度：${displayValue(PRIVACY_TEXT, sceneConfig.privacy)}`);
-  if (safeArray(sceneConfig.props).length) parts.push(`場景道具：${sceneConfig.props.join('、')}`);
+  if (safeArray(sceneConfig.props).length) parts.push(`場景道具：${displayList(SCENE_PROP_TEXT, sceneConfig.props)}`);
   return parts.length ? parts.join('；') : '未指定額外場景條件。';
 }
 
@@ -116,11 +117,7 @@ function stageLines(generation, byId) {
   for (const step of generation?.results ?? []) {
     if (step.kind === 'anchor-error') continue;
     if (!step.item || !grouped.has(step.stage)) continue;
-    grouped.get(step.stage).push({
-      kind: step.kind,
-      forcedItemId: step.forcedItemId || null,
-      text: renderTemplate(step, byId)
-    });
+    grouped.get(step.stage).push({ kind: step.kind, forcedItemId: step.forcedItemId || null, text: renderTemplate(step, byId) });
   }
   const lines = [];
   for (const stage of [1, 2, 3]) {
@@ -145,9 +142,7 @@ function findMainAnchor(generation, byId) {
   return { id: main.item.id, label: main.item.label || main.item.id, stage: main.stage, text: renderTemplate(main, byId) };
 }
 
-export function normalizeStoryConfig(input = {}) {
-  return { ...DEFAULT_STORY_CONFIG, ...(input || {}) };
-}
+export function normalizeStoryConfig(input = {}) { return { ...DEFAULT_STORY_CONFIG, ...(input || {}) }; }
 
 export function compileStoryPrompt({ generation, characters, sceneConfig = {}, storyConfig = {} } = {}) {
   const normalizedCharacters = normalizeCharacters(characters);
@@ -160,17 +155,14 @@ export function compileStoryPrompt({ generation, characters, sceneConfig = {}, s
   lines.push('根據以下角色設定、場景限制與互動節點，寫成一段連續、自然、有角色性的成人虛構故事。不要把節點逐條照抄成清單；要把它們轉化成有因果、反應與節奏的完整場景。');
   lines.push('所有角色皆為成年人。');
   lines.push('');
-
   lines.push('【角色設定】');
   if (normalizedCharacters.length) for (const character of normalizedCharacters) lines.push(describeCharacter(character));
   else lines.push('- 未提供角色資料。');
   lines.push('');
-
   lines.push('【場景】');
   lines.push(describeScene(sceneConfig));
   lines.push('場景條件是固定限制，不要為了方便劇情自行改變隱私程度、地點或道具存在狀態。');
   lines.push('');
-
   lines.push('【敘事控制】');
   lines.push(`- 建議篇幅：${readConfig(LENGTH_TEXT, config.length, 'short')}`);
   lines.push(`- 開場：${readConfig(OPENING_TEXT, config.opening, 'direct')}`);
@@ -180,7 +172,6 @@ export function compileStoryPrompt({ generation, characters, sceneConfig = {}, s
   lines.push(`- 成人內容占比：${readConfig(ADULT_SHARE_TEXT, config.adultContentShare, 'medium')}`);
   lines.push(`- 描寫焦點：${readConfig(FOCUS_TEXT, config.descriptionFocus, 'interaction')}`);
   lines.push('');
-
   lines.push('【主軸】');
   if (anchor) {
     lines.push(`主軸事件：${anchor.label}（第 ${anchor.stage} 階段）`);
@@ -190,13 +181,11 @@ export function compileStoryPrompt({ generation, characters, sceneConfig = {}, s
     lines.push('沒有可用的主軸事件；不要自行捏造新的核心玩法。');
   }
   lines.push('');
-
   lines.push('【互動節點】');
   const beats = stageLines(generation, byId);
   if (beats.length) lines.push(...beats);
   else lines.push('沒有可用節點。');
   lines.push('');
-
   lines.push('【一致性要求】');
   lines.push('- 保持角色身體設定、道具所有權、角色方向與行動限制前後一致。');
   lines.push('- 不要替角色新增未提供的身體條件或道具，也不要把其中一人的身體條件錯算到另一人。');
@@ -205,10 +194,8 @@ export function compileStoryPrompt({ generation, characters, sceneConfig = {}, s
   lines.push('- 文字直接度只控制措辭，不應改變可選玩法或身體設定。');
   lines.push('- 避免為了補字數重複同一個動作、對話或情緒。');
   lines.push('');
-
   lines.push('【輸出方式】');
   lines.push('直接開始故事正文，不要解釋規則、不要輸出分析、不要重列設定表。');
   lines.push('結尾不需要刻意完整收束；在當前情境自然停下即可。');
-
   return lines.join('\n');
 }
