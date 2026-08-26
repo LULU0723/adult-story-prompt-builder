@@ -1,3 +1,5 @@
+import { itemCopy } from './item-copy-v01.js';
+
 const DEFAULT_STORY_CONFIG = Object.freeze({
   length: 'short',
   opening: 'direct',
@@ -75,13 +77,21 @@ function displayName(character, fallback) { return character?.displayName || cha
 function displayValue(map, value) { return map[value] || value; }
 function displayList(map, values) { return safeArray(values).map(value => displayValue(map, value)).join('、'); }
 
+function renderedItemText(step) {
+  const copy = itemCopy(step.item);
+  return copy?.narrativeDirection || step.item?.promptTemplate || step.item?.label || '';
+}
+
+function itemDisplayName(item) {
+  return itemCopy(item)?.displayName || item?.label || item?.id || '';
+}
+
 function renderTemplate(step, byId) {
   const actorId = step.direction?.actorId;
   const receiverId = step.direction?.receiverId;
   const actor = displayName(byId[actorId], actorId || '角色A');
   const receiver = displayName(byId[receiverId], receiverId || '角色B');
-  const template = step.item?.promptTemplate || step.item?.label || '';
-  return template.replaceAll('{actor}', actor).replaceAll('{receiver}', receiver).trim();
+  return renderedItemText(step).replaceAll('{actor}', actor).replaceAll('{receiver}', receiver).trim();
 }
 
 function describeCharacter(character) {
@@ -139,7 +149,7 @@ function stageLines(generation, byId) {
 function findMainAnchor(generation, byId) {
   const main = (generation?.results ?? []).find(step => step.kind === 'main' && step.item);
   if (!main) return null;
-  return { id: main.item.id, label: main.item.label || main.item.id, stage: main.stage, text: renderTemplate(main, byId) };
+  return { id: main.item.id, label: itemDisplayName(main.item), stage: main.stage, text: renderTemplate(main, byId) };
 }
 
 export function normalizeStoryConfig(input = {}) { return { ...DEFAULT_STORY_CONFIG, ...(input || {}) }; }
