@@ -76,7 +76,7 @@ export const ITEM_COPY_V01 = Object.freeze({
   }),
   breast_focus_touch: Object.freeze({
     displayName: '胸部偏好觸碰',
-    narrativeDirection: '{actor} 把手部觸碰與注意力集中在 {receiver} 的胸部，描寫重點放在接觸方式、反應與節奏變化，且只在 {receiver} 確實具備胸部設定時使用。',
+    narrativeDirection: '{actor} 把手部觸碰與注意力集中在 {receiver} 的胸部，描寫重點放在接觸方式、反應與節奏變化。',
     designerNote: 'Actor manual toucher + receiver breasts body_feature。'
   }),
   penis_penetrative_contact: Object.freeze({
@@ -131,7 +131,7 @@ export const ITEM_COPY_V01 = Object.freeze({
   }),
   penis_oral_contact: Object.freeze({
     displayName: '陰莖口部互動',
-    narrativeDirection: '{actor} 使用自己的陰莖與 {receiver} 的口部進行親密互動，讓位置、節奏與雙方反應保持清楚一致，且只在雙方相應身體設定都存在時使用。',
+    narrativeDirection: '{actor} 使用自己的陰莖與 {receiver} 的口部進行親密互動，讓位置、節奏與雙方反應保持清楚一致。',
     designerNote: 'Actor penis penetrator + receiver oral receptacle；owner-aware。'
   }),
   semi_private_risk_escalation: Object.freeze({
