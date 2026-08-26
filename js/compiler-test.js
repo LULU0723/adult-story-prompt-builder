@@ -1,4 +1,5 @@
 import { compileStoryPrompt } from './compiler-v01.js';
+import { ITEM_COPY_V01 } from './item-copy-v01.js';
 
 const characters = [
   { id:'A', displayName:'甲', adult:true, gender:'female', presentation:'androgynous', anatomy:['vagina','mouth','hands'], equipment:[], traits:{dominance:'high'} },
@@ -38,6 +39,46 @@ export function runCompilerSmokeTests() {
 
   const medium = compileStoryPrompt({ generation, characters, storyConfig:{length:'medium'} });
   assert(medium.includes('約 1000–1800 個中文字'), 'medium length calibration missing', failures);
+
+  const restraintGeneration = { results: [
+    { stage:2, kind:'main', direction:{actorId:'A',receiverId:'B'}, item:{id:'light_restraint',label:'舊標籤不應優先',promptTemplate:'{actor} OLD_SPEC {receiver}。'} }
+  ] };
+  const restraintPrompt = compileStoryPrompt({generation:restraintGeneration,characters});
+  assert(restraintPrompt.includes('本篇核心：輕度行動限制（第 2 階段）'), 'item-copy displayName should override legacy label', failures);
+  assert(restraintPrompt.includes('甲 以明確但仍保留部分活動空間的方式限制 乙 的動作'), 'restraint narrativeDirection should be used', failures);
+  assert(restraintPrompt.includes('持續把這個受限狀態寫進姿勢、反應與可採取的動作裡'), 'restraint preservation wording missing', failures);
+  assert(!restraintPrompt.includes('OLD_SPEC'), 'legacy promptTemplate leaked despite item-copy override', failures);
+
+  const fullRestraintGeneration = { results: [
+    { stage:3, kind:'main', direction:{actorId:'A',receiverId:'B'}, item:{id:'full_restraint',label:'舊高度限制',promptTemplate:'{actor} OLD_FULL {receiver}。'} }
+  ] };
+  const fullRestraintPrompt = compileStoryPrompt({generation:fullRestraintGeneration,characters});
+  assert(fullRestraintPrompt.includes('本篇核心：高度行動限制（第 3 階段）'), 'full-restraint displayName missing', failures);
+  assert(fullRestraintPrompt.includes('幾乎無法自行改變姿勢'), 'full-restraint narrativeDirection missing', failures);
+  assert(!fullRestraintPrompt.includes('OLD_FULL'), 'full-restraint legacy promptTemplate leaked', failures);
+
+  const penetrativeGeneration = { results: [
+    { stage:1, kind:'accent', direction:{actorId:'A',receiverId:'B'}, item:{id:'manual_penetrative_contact',label:'OLD_MANUAL_LABEL',promptTemplate:'{actor} generic manual penetrator receptacle {receiver}。'} },
+    { stage:2, kind:'secondary', direction:{actorId:'A',receiverId:'B'}, item:{id:'toy_penetrative_contact',label:'OLD_TOY_LABEL',promptTemplate:'{actor} owner provider toy receptacle {receiver}。'} },
+    { stage:3, kind:'main', direction:{actorId:'A',receiverId:'B'}, item:{id:'penis_penetrative_contact',label:'OLD_PENIS_LABEL',promptTemplate:'{actor} penis penetrator provider receptacle {receiver}。'} }
+  ] };
+  const penetrativePrompt = compileStoryPrompt({generation:penetrativeGeneration,characters});
+  assert(penetrativePrompt.includes('手部插入互動') && penetrativePrompt.includes('以手部進行插入式的親密互動'), 'manual penetrative narrative copy missing', failures);
+  assert(penetrativePrompt.includes('穿戴式道具插入互動') && penetrativePrompt.includes('使用自己攜帶的穿戴式道具'), 'toy penetrative narrative copy missing', failures);
+  assert(penetrativePrompt.includes('本篇核心：陰莖插入互動（第 3 階段）') && penetrativePrompt.includes('使用自己的陰莖'), 'penis penetrative narrative copy missing', failures);
+  assert(!penetrativePrompt.includes('OLD_MANUAL_LABEL') && !penetrativePrompt.includes('OLD_TOY_LABEL') && !penetrativePrompt.includes('OLD_PENIS_LABEL'), 'legacy penetrative labels leaked', failures);
+  assert(!penetrativePrompt.includes('generic manual penetrator') && !penetrativePrompt.includes('owner provider') && !penetrativePrompt.includes('receptacle'), 'engine/spec penetrative wording leaked into compiled prompt', failures);
+
+  const copyEntries = Object.entries(ITEM_COPY_V01);
+  assert(copyEntries.length === 29, `expected 29 migrated item copies, got ${copyEntries.length}`, failures);
+  const forbiddenNarrativeTerms = /\b(provider|owner|penetrator|receptacle|mobility|reachability|fixture)\b/i;
+  for (const [id, copy] of copyEntries) {
+    assert(typeof copy.displayName === 'string' && copy.displayName.trim(), `${id}: displayName missing`, failures);
+    assert(typeof copy.narrativeDirection === 'string' && copy.narrativeDirection.trim(), `${id}: narrativeDirection missing`, failures);
+    assert(typeof copy.designerNote === 'string' && copy.designerNote.trim(), `${id}: designerNote missing`, failures);
+    const narrativeWithoutPlaceholders = copy.narrativeDirection.replaceAll('{actor}', '').replaceAll('{receiver}', '');
+    assert(!forbiddenNarrativeTerms.test(narrativeWithoutPlaceholders), `${id}: engine/spec term leaked into narrativeDirection`, failures);
+  }
 
   const noAnchor = compileStoryPrompt({generation:{results:[]},characters});
   assert(noAnchor.includes('沒有可用的主軸事件；不要自行捏造新的核心玩法。'), 'missing-anchor guard text missing', failures);
