@@ -57,6 +57,7 @@ const ANATOMY_TEXT = Object.freeze({ vagina:'陰道', penis:'陰莖', breasts:'�
 const EQUIPMENT_TEXT = Object.freeze({ strap_on:'穿戴式道具' });
 const PRIVACY_TEXT = Object.freeze({ private:'私密', semi:'半公開', public:'公開' });
 const SCENE_PROP_TEXT = Object.freeze({ mirror:'鏡子' });
+export const PROJECT_SPEC_VERSION = 'v1';
 
 function safeArray(value) { return Array.isArray(value) ? value : []; }
 function normalizeCharacters(characters) {
@@ -220,6 +221,8 @@ export function renderStandalonePrompt(model) {
 export function renderProjectPrompt(model) {
   const lines = [];
   lines.push('【本次故事規格】');
+  lines.push(`規格版本：${PROJECT_SPEC_VERSION}`);
+  lines.push('所有角色皆為成年人。');
   lines.push('以下內容是本次故事的動態設定；請套用專案既有的固定寫作規則。');
   lines.push('');
   pushDynamicSections(lines, model);
